@@ -1,0 +1,574 @@
+\documentclass{article}
+\newcommand\lmsuite{{\em lmsuite }}
+\title{\lmsuite User's Manual\\
+  for version $0.92$}
+\author{}
+\begin{document}
+\maketitle
+\tableofcontents
+\section{Introduction}
+LATTE/MUSE Numerical Suite ({\em lmsuite}) is a Traveling Wave Tube (TWT)
+code developed as a part of my Ph.D. thesis research
+\cite{wohlbier:phdthesis}. The code can solve three different
+1-d nonlinear multifrequency TWT models: LATTE, MUSE, and S-MUSE.
+LATTE (Lagrangian TWT Equations)~\cite{wohlbier:muse02}
+is a ``large-signal'' code of the
+variety originally developed for single frequency
+by Nordsieck~\cite{nordsieck:lsbtwa53} and later extended
+to multifrequency by El-Shandwily~\cite{el-shandwily:amstwa65}
+and Giarola~\cite{giarola:msotwt68}. The MUSE (multifrequency
+spectral Eulerian) and S-MUSE (simplified-MUSE) models~\cite{wohlbier:muse02}
+are nonlinear models derived for their unique spectral characteristics.
+Generally MUSE and S-MUSE are not accurate in saturation due to their
+inability to predict electron overtaking effects, however due to their
+spectral structure they are very useful for gaining insights into nonlinear
+TWT physics~\cite{wohlbier:muse02, wohlbier:growth02, wohlbier:ampm03, wohlbier:hi03, wohlbier:phdthesis}.
+Together the three models comprise a ``suite'' hopefully useful for
+TWT education, research, and design.
+
+\section{Acknowledgements}
+Thanks to Mark Converse for comments on structuring the input deck
+and being the first beta tester. Thanks to
+Michel Olagnon for helping restructure the LATTE portion of the
+code to run faster.
+
+Thanks to my research advisors Professor John Booske
+and Professor Ian Dobson for their advice and encouragement. Thanks to
+the Innovative Microwave Vacuum Electronics MURI and AFOSR for funding
+support.
+
+\section{Physics}
+THIS SECTION IS IN PROGRESS. For general model derivations see
+\cite{wohlbier:muse02}. Details of code implementations including losses,
+normalizations, and slowly varying envelope approximations are in
+\cite{wohlbier:phdthesis} and will appear here soon.
+\begin{itemize}
+\item geometry
+\item models
+\end{itemize}
+\subsection{Sheath helix model}
+The sheath helix model currently implemented is the simplest one
+available \cite[pg.~??39--41??]{rowe:newip65}. It does not account for
+a conducting barrel and should only be used for qualitative
+purposes. The equations computed are the cold circuit phase velocity
+\begin{eqnarray}\label{eq:phase_velocity}
+  v_{\rm ph} & = & \frac{c}{\cot \psi} \left[ \frac{I_0(\gamma r_{\rm h})
+      K_0(\gamma r_{\rm h})}{I_1(\gamma r_{\rm h}) K_1(\gamma r_{\rm
+      h})}\right]^{1/2},
+\end{eqnarray}
+and the cold circuit interaction impedance
+\begin{eqnarray}\label{eq:impedance}
+  K & = & \sqrt\frac{\mu_0}{\epsilon_0} \frac{\cot \psi}{2 \pi}
+  \left[I_0(\gamma r_{\rm h}) K_0(\gamma r_{\rm h}) I_1(\gamma r_{\rm
+  h}) K_1(\gamma r_{\rm h})\right]^{1/2}.
+\end{eqnarray}
+In (\ref{eq:phase_velocity}) and (\ref{eq:impedance}) we have
+\begin{eqnarray}
+  \label{eq:gamma}
+  \gamma^2 & = & k^2 \cot^2 \psi \frac{I_1(\gamma r_{\rm h})
+    K_1(\gamma r_{\rm h})}{I_0(\gamma r_{\rm h}) K_0(\gamma r_{\rm h})}\\
+  k^2 & = & \omega^2 \mu_0 \epsilon_0\\
+  \cot \psi & = \frac{2 \pi r_{\rm h}}{z_{\rm h}},
+\end{eqnarray}
+where $r_{\rm h}$ is the helix radius, $z_{\rm h}$ is the turn to turn
+spacing (entered into the code as ``helix pitch''), and
+$\mu_0$, $\epsilon_0$ and $c$ are the permeability,
+permittivity, and the speed of light of free space respectively.
+\subsection{Space charge reduction factor}
+The formula for computing space charge reduction factor is taken
+from \cite{antonsen:twtdnde98}. Using the Bessel function identity
+\begin{eqnarray}
+  \frac{d}{dz}K_0(z) & = & - K_1(z)
+\end{eqnarray}
+we have for the factor $R_{\rm sc}$
+\begin{eqnarray}
+  \lefteqn{R_{\rm sc} =} & & \nonumber\\
+  && 1 + \frac{2}{r_{\rm bo}^2 - r_{\rm bi}^2}
+  \left\{\left[\rule{0mm}{5mm}r_{\rm bo}I_1(\kappa r_{\rm bo})
+      - r_{\rm bi}I_1(\kappa r_{\rm bi})\right]
+    \left[\frac{K_0(\kappa r_{\rm h})}{I_0(\kappa r_{\rm h})}
+      \left(\rule{0mm}{5mm}r_{\rm bi}I_1(\kappa r_{\rm bi})
+        - r_{\rm bo}I_1(\kappa r_{\rm bo})
+      \right)\right.\right.\nonumber\\
+  && \left.\left. - r_{\rm bo} K_1(\kappa r_{\rm bo})\rule{0mm}{5mm}\right]
+    - r_{\rm bi} I_1(\kappa r_{\rm bi})
+    \left[\rule{0mm}{5mm}r_{\rm bi}K_1(\kappa r_{\rm bi})
+      - r_{\rm bo}K_1(\kappa r_{\rm bo})\right]\right\}
+\end{eqnarray}
+where $r_{\rm bo}$ is the outer beam radius, $r_{\rm bi}$ is the inner
+beam radius, $r_{\rm h}$ is the helix radius, and
+\begin{eqnarray}
+  \kappa^2 & = & \beta_{e,c}^2 - \frac{\omega^2}{c^2}.
+\end{eqnarray}
+For the term $\beta_{e,c}$ one can use either the electron stream 
+wavenumber $\beta_e$
+\begin{eqnarray}
+  \beta_e & = & \frac{\omega}{u_0}
+\end{eqnarray}
+where $u_0$ is the dc beam velocity, or the circuit wavenumber $\beta_c$
+\begin{eqnarray}
+  \beta_c & = & \frac{\omega}{\tilde v_{{\rm ph}\ell}}
+\end{eqnarray}
+where $\tilde v_{{\rm ph}\ell}$ is the frequency dependent cold circuit
+phase velocity. To use $\beta_c$ one sets {\tt use\_beta\_c = true}
+in the {\tt \&dispersion} namelist. However, when {\tt use\_beta\_c = true},
+$\beta_e$ is still used for frequencies that do not have a phase velocity
+specified.
+
+\section{Running \lmsuite}
+To download executables and source code for \lmsuite go to\\
+{\tt http://www.lmsuite.org} and follow
+the instructions provided.
+
+To run {\em lmsuite}:
+\begin{enumerate}
+\item open a command shell (Windows, Linux, or Unix)
+\item change to the {\tt LMSuitev0.92} directory
+\item type {\tt lmsuite} at the shell prompt.
+\end{enumerate}
+The program
+reads files in the directory {\tt ./LMSuitev0.92/inputs/} to determine
+what is to be computed. Possible files in {\tt ./inputs/} are
+{\tt lmsuite.nml} (main
+input deck),
+{\tt scan\_data.nml} (optional input deck containing scan
+information),
+{\tt movies.nml} (optional input deck containing information to
+generate ``frame'' files used for animation),
+{\tt circuit.in} (optional file defining TWT circuit),
+{\tt frequencies.in} (optional file specifying input frequencies, input powers,
+and input phases), {\tt dispersion.in} (optional file specifying TWT
+dispersion properties), and {\tt losses.in} (optional file specifying
+circuit losses). For details on using these files see
+Section~\ref{sec:namelists}. The output data is written to the directory
+{\tt ./LMSuitev0.92/outputs/}. See Section \ref{ss:sample_namelists}
+for a description of the sample namelists included with the distribution.
+
+Generally one can run the code in either ``single pass mode'' or ``scan mode''
+as described below.
+
+\subsection{Single pass mode}\label{ss:spm}
+The single pass mode solves the TWT equations for a set of
+fixed input parameters.
+Single pass mode is chosen by setting {\tt num\_scan\_namelists}~$= 0$ in the
+{\tt \&run} namelist.
+
+Available plotting routines in single pass mode are:
+\begin{itemize}
+\item {\tt power\_out\_vs\_freq}: Circuit power at TWT output versus frequency
+  for all circuit frequencies. Output data file: {\tt pow\_vs\_freq.X.sp.dat}.
+\item {\tt phase\_vs\_freq}: Voltage phase at TWT output versus frequency
+  for all circuit frequencies. Output data file:
+  {\tt phase\_vs\_freq.X.sp.dat}.
+\item {\tt circuit\_power\_vs\_z}: Circuit power versus axial distance $z$ for
+  all circuit frequencies. Output data file: {\tt pow\_vs\_z.X.sp.dat}.
+\item {\tt magnitude\_vs\_z}: Magnitude of circuit voltage, circuit current,
+  space charge field, beam velocity, or beam density versus axial
+  distance $z$ for all circuit or space charge frequencies (depending on
+  whether the variable is a circuit variable or a beam variable). Variable
+  chosen by integer $1-6$ respectively. See {\tt \&output\_data} namelist
+  for details. Output data file: {\tt mag\_vs\_z.X.sp.dat}.
+\item {\tt phase\_vs\_z}: Phase of circuit voltage, circuit current, space
+  charge field, beam velocity, or beam density versus axial distance $z$ for
+  all circuit or space charge frequencies (depending on whether the variable
+  is a circuit variable or a beam variable). Variable chosen by
+  integer $1-6$ respectively. See {\tt \&output\_data} namelist for details.
+  Output data file: {\tt phase\_vs\_z.X.sp.dat}.
+\item {\tt phase\_differences\_vs\_z}: Phase difference between two of:
+  circuit voltage, circuit current, space charge field, beam velocity,
+  or beam density versus axial distance $z$ for all circuit or space charge
+  frequencies (depending on whether the variables are circuit
+  variables or a beam variables). Variables chosen by integers $1-6$.
+  See {\tt \&output\_data} namelist for details.
+  Output data file: {\tt phase\_diff\_vs\_z.X.sp.dat}.
+\item {\tt disk\_orbits\_vs\_z}: not implemented
+\item {\tt conserved\_quantity\_vs\_z}: not implemented
+\item {\tt beam\_energy\_vs\_z}: not implemented
+\item {\tt dc\_beam\_vel\_vs\_z}: The average electron beam velocity as
+  as function of axial distance $z$.
+  Output data file: {\tt dcbeam\_vs\_z.X.sp.dat}.
+\item {\tt phase\_space} (LATTE only): Create particle phase space plots
+  at a specified number of times.
+  Output data file: {\tt phase\_space.M.dat} where M corresponds to the
+  location of the {\tt time\_array}.
+\end{itemize}
+In the above file names {\tt X} is {\tt L, M,} or {\tt S} depending
+on whether LATTE, MUSE or S-MUSE generates the data. The tag {\tt .sp.}
+in the file name represents ``single pass.''
+
+\subsection{Scan mode}
+In contrast to the single pass mode one can have a simulation scan various
+input parameters, solving the TWT equations for each set of input
+parameters.
+
+\subsubsection{Single parameter scans}
+For a single parameter scan a single input parameter is scanned over
+a specified range. Each single parameter scan adds $1$ to the value of
+{\tt num\_scan\_namelists} in the
+{\tt \&run} namelist. The scan has its own {\tt \&scan} namelist
+in the file {\tt scan\_data.nml} and the type is specified by the
+{\tt scanID}. Full details for specifying
+scans are given in Section~\ref{ss:scan_data}. The types of single parameter
+scans and the output each can provide are:
+\begin{enumerate}
+\item Input power scan ({\tt scanID}~$=1$): For a chosen frequency the
+  input power is varied over a range.
+  This scan is used for making the widely used AM/AM and AM/PM curves.\\
+  Available plotting routines in the input power scan are:
+  \begin{itemize}
+  \item {\tt power\_out\_vs\_power\_in}: Output power versus input power at
+    either the frequency specified in the scan or all frequencies.
+    Output data file: {\tt pout\_vs\_pin.X.N.dat}.
+  \item {\tt gain\_vs\_power\_in}: Gain versus input power at either
+    the frequency specified in the scan or all frequencies.
+    Output data file: {\tt gain\_vs\_pin.X.N.dat}.
+  \item {\tt phase\_out\_vs\_power\_in}: Output voltage phase versus input
+    power at either the frequency specified in the scan or all frequencies.
+    Output data file: {\tt phase\_vs\_pin.X.N.dat}.
+  \item All of the {\tt *\_vs\_z} plots (see Section \ref{ss:spm} for a
+    listing). For each of the input power values, a full set of
+    {\tt *\_vs\_z} curves are given.
+  \end{itemize}
+\item Input phase scan ({\tt scanID}~$=2$): For a chosen frequency the
+  input phase is varied over a range. This scan is useful for studying
+  harmonic/intermodulation injection where getting the critical input phase
+  is neccessary to obtain reduction of the harmonic/intermodulation outputs.\\
+  Available plotting routines in the input power scan are:
+  \begin{itemize}
+  \item {\tt power\_out\_vs\_phase\_in}: Output power versus input phase at
+    the frequency specified in the scan.
+    Output data file: {\tt pout\_vs\_phasein.X.N.dat}.
+  \item All of the {\tt *\_vs\_z} plots (see Section \ref{ss:spm} for a
+    listing). For each of the input phase values, a full set of
+    {\tt *\_vs\_z} curves are given.
+  \end{itemize}
+\item Frequency scan ({\tt scanID}~$=3$): For a chosen input
+  {\tt frequency\_integer} {\em array location}
+  (namelist {\tt \&frequency\_list}), scan the frequency over a range of
+  values. That is, scan the value of frequency for a particular array
+  element in the frequency array {\tt frequency\_integer}.\\
+  Available plotting routines in the frequency scan are:
+  \begin{itemize}
+  \item {\tt power\_out\_vs\_freq}: Output power at the {\em scanned}
+    frequency versus the scanned frequency OR output power at a {\em different
+    frequency} versus the scanned frequency.
+    Output data file: {\tt pout\_vs\_freq.X.N.dat}.
+  \item {\tt gain\_vs\_freq}: Gain at the {\em scanned}
+    frequency versus the scanned frequency.
+    Output data file: {\tt gain\_vs\_freq.X.N.dat}.
+  \item {\tt phase\_vs\_freq}: Output voltage phase at the {\em scanned}
+    frequency versus the scanned frequency OR output voltage phase
+    at a {\em different frequency} versus the scanned frequency.
+    Output data file: {\tt pout\_vs\_freq.X.N.dat}.
+  \end{itemize}
+\item Dispersion parameter scan ({\tt scanID}~$=4$): At a particular frequency
+  scan phase velocity, interaction impedance, loss, or space charge reduction
+  factor.\\
+  Available plotting routines in the dispersion parameter scan are:
+  \begin{itemize}
+  \item All of the {\tt *\_vs\_z} plots (see Section \ref{ss:spm} for a
+    listing). For each of the dispersion parameter values, a full set of
+    {\tt *\_vs\_z} curves are given.
+  \end{itemize}
+\item Beam parameter scan: not implemented
+\end{enumerate}
+In the above file names {\tt X} is {\tt L, M,} or {\tt S} depending
+on whether LATTE, MUSE or S-MUSE generates the data, and {\tt N} is
+an integer corresponding to the scan number, i.e., the order that
+the scan appears in the file {\tt scan\_data.nml}.
+
+In principle one can run as many scans as desired. Presently the maximum
+number is $10$ (set by {\tt max\_scans} in the source file
+{\tt parameters.f90}), but this can easily be changed for future versions.
+
+
+\subsubsection{Two parameter scans}
+A two parameter scan connects two {\tt \&scan} namelists so that
+two different parameters are scanned simultaneously.
+Two {\tt \&scan} namelists must be provided for each two parameter
+scan desired. The first of
+these two namelists must have {\tt two\_parameter = true}, where the second
+namelist must have {\tt two\_parameter = false}. Correspondingly
+a count of $2$ must be added to {\tt num\_scan\_namelists} in the
+{\tt\&run} namelist in {\tt lmsuite.nml}.
+
+As a general rule two parameter scans provide data that will generate
+parameterized curves. The first scan (i.e.~the scan with
+{\tt two\_parameter = true}) should be over the variable that you wish
+to have as your independent coordinate axis in graphs, and the second scan
+should be
+over the variable that will parameterize the curves.
+
+Not all scan types (i.e.~{\tt scanID}s) may be used together.
+The allowable combinations of {\tt scanID}s are given below.
+Note that the ordering of the scans in the list below must be the same
+ordering entered into the namelist.
+\begin{itemize}
+\item Input power scan ({\tt scanID = 1}) and dispersion parameter scan
+  ({\tt scanID = 4}).
+  Available plotting routines for this two parameter scan are\\
+  {\tt power\_out\_vs\_power\_in}, {\tt gain\_vs\_power\_in}, and
+  {\tt phase\_out\_vs\_power\_in}.
+\end{itemize}
+
+
+\subsection{Namelists}\label{sec:namelists}
+\subsubsection{\tt lmsuite.nml}
+NAMELIST DESCRIPTIONS ARE CURRENTLY GIVEN ONLY IN THE PROVIDED NAMELIST
+FILES. AS SOON AS THE NAMELISTS SEEM TO HAVE MATURED, THE INFORMATION WILL
+BE TRANSFERRED TO THIS SECTION.
+
+\subsubsection{\tt scan\_data.nml}\label{ss:scan_data}
+NAMELIST DESCRIPTIONS ARE CURRENTLY GIVEN ONLY IN THE PROVIDED NAMELIST
+FILES. AS SOON AS THE NAMELISTS SEEM TO HAVE MATURED, THE INFORMATION WILL
+BE TRANSFERRED TO THIS SECTION.
+
+\subsubsection{\tt movies.nml}\label{ss:movies}
+NAMELIST DESCRIPTIONS ARE CURRENTLY GIVEN ONLY IN THE PROVIDED NAMELIST
+FILES. AS SOON AS THE NAMELISTS SEEM TO HAVE MATURED, THE INFORMATION WILL
+BE TRANSFERRED TO THIS SECTION.
+
+\subsubsection{The sample namelists}\label{ss:sample_namelists}
+The namelists ({\tt *.nml}) and {\tt *.in} files provided with the code
+are based on the TWT circuit found in \cite{abe:clhtwtc00}.
+The default run is a single pass of the slowly varying envelope version
+of LATTE for $1.538\,$GHz. A scan namelist is also provided to create
+a figure similar to Fig.~3 of \cite{abe:clhtwtc00}.
+The circuit and beam parameters are only approximate, so we do
+not expect to be able to reproduce exactly the results of~\cite{abe:clhtwtc00}.
+Comments are provided below on certain aspects of the input files to
+help the new user get started.
+
+\begin{itemize}
+\item {\tt \&user\_interface}
+  \begin{itemize}
+  \item This namelist is presently set to maximum verboseness. Setting all of
+    these flags to false forces the code to run in ``silent mode.''
+  \item Once one is comfortable that they are entering the proper data,
+    they can set {\tt echo\_namelists = false}. However, when preparing
+    a new namelist this flag can be {\em very} useful in determining whether
+    you are entering the data that you intend to. Setting
+    {\tt echo\_namelists = true} should always be your
+    first recourse if the code is not doing what you think it should do.
+  \end{itemize}
+\item {\tt \&run}
+  \begin{itemize}
+  \item Since the TWT circuit has a substantial sever (see
+    Fig.~1 of \cite{abe:clhtwtc00}) one has to use the slowly varying envelope
+    version of the models ({\tt svea = true}) due to reflection issues.
+    Since only LATTE presently
+    has the slowly varying envelope formulation available, we choose only to
+    run LATTE ({\tt select\_code = 'L'}).
+  \item For single pass mode one has {\tt num\_scan\_namelists = 0}. To run
+    the input power scan change {\tt num\_scan\_namelists = 1}. The input
+    power scan produces data that when graphed resemble Fig.~3(a)
+    of \cite{abe:clhtwtc00}.
+    Changing {\tt read\_from\_file = true} in {\tt \&frequency\_list} and
+    changing
+    {\tt int\_param\_1 = 1750} in the {\tt \&scan} namelist should
+    approximate Fig.~3(b) of \cite{abe:clhtwtc00}.
+  \end{itemize}
+\item {\tt \&output\_data}
+  \begin{itemize}
+  \item Since {\tt plot\_dispersion = true} files will be generated in
+    {\tt ./outputs/} containing the circuit information. Graph the contents
+    of these files to see
+    how we have approximated the circuit of Fig.~1 in \cite{abe:clhtwtc00}.
+    {\tt vph.dat} contains phase velocity data,
+    {\tt impedance.dat} has interaction impedance data,
+    {\tt loss.dat} contains loss information, and
+    {\tt scrf.dat} contains space charge reduction factor data.
+  \end{itemize}
+\item {\tt \&frequency\_list}
+  \begin{itemize}
+  \item To be able to resolve frequencies down to $1.0\,$MHz we set\\
+    {\tt base\_frequency}$= 1.0{\rm e}6\,$Hz. Therefore for $1.538\,$GHz the
+    frequency integer is $1538$. Changing {\tt read\_from\_file = true}
+    changes the frequency to $1.75\,$GHz since this is the frequency specified
+    in\\ {\tt frequencies.in}.
+  \item We set {\tt highest\_order\_IMP = 2} so that the second harmonic is
+    computed. One could include the $3^{\rm rd}$ harmonic {\em in the beam}
+    by changing {\tt highest\_order\_IMP = 3} and increasing the
+    {\tt max\_space\_charge\_freq} to $3900$. However, unless
+    additional dispersion data is supplied
+    the {\tt max\_ckt\_freq} must not be increased.
+  \end{itemize}
+\item {\tt \&circuit}
+  \begin{itemize}
+  \item Since {\tt read\_from\_file = true} circuit data is read from
+    {\tt circuit.in}.
+  \end{itemize}
+\item {\tt \&dispersion}
+  \begin{itemize}
+  \item There are 10 sections in this circuit. There are three ``pull
+    turns,'' two uniform sections, a tapered section, another small
+    uniform section, and finally three pull turns. To get the tapered
+    section set {\tt inrplt\_sections = true} and list section number
+    6 in {\tt interpol\_sects\_list}. Sections 6 and 7 have identical
+    parameters so that paramters are continuous across their
+    interface. This is an example of a moderately complicated
+    circuit.
+  \item Since {\tt use\_antonsen\_formula = true} one can put $0.0$'s in
+    for all {\tt space\_charge\_redux} values.
+  \end{itemize}
+\item {\tt \&losses}
+  \begin{itemize}
+  \item Frequency independent loss is entered by setting two loss frequencies,
+    one below {\tt min\_ckt\_freq} and one above {\tt max\_ckt\_freq}.
+  \item To compare how loss data is entered when {\tt read\_from\_file =
+      true}, see {\tt losses.in}.
+  \end{itemize}
+\item {\tt \&numerical\_data}
+  \begin{itemize}
+  \item The numbers in this namelist are good starting points for most
+    simulations.
+  \end{itemize}
+\end{itemize}
+
+\subsection{Problems running?}
+THIS SECTION IS IN PROGRESS. PLEASE REPORT SUGGESTIONS.
+\begin{enumerate}
+\item Q: The program crashes while reading data. A:
+\item Q: The program crashes while reading data. Error: ``Too many values
+  are specified for the item name X in the NAMELIST input data.''\\
+  A: Code built by the Lahey compiler does not like blank lines in namelists.
+  Remove any blank lines or lines WITH ONLY COMMENTS from your namelists.
+\item Q: Something is fishy. A: Try echoing input to make sure you are putting
+  in what you think you are putting in.
+\end{enumerate}
+
+
+
+
+
+\section{Compiling}
+See {\tt http://www.lmsuite.org}. Instructions
+will eventually be transferred to here.
+
+\subsection{Features accessible only by recompiling}
+This section describes some features in the code that are so specialized
+that they do not warrant control by namelist variables. To access the features
+one must edit the code and recompile.
+
+\subsubsection{Create only harmonic frequencies}
+The algorithm for computing
+intermodulation products is {\em very} inefficient if one only wants to
+compute harmonics of a fundamental. For modest numbers of harmonics this
+is not a problem, however for large numbers of harmonics, e.g. $> 40$,
+the time it takes to compute the harmonics becomes on the order of several
+minutes. When the number of harmonics is even larger, e.g. $>100$ then
+it takes unacceptably long to compute the harmonics. The code contains
+a function that computes the harmonics using the simple harmonic formula,
+rather than the more general intermodulation frequency computation,
+which makes simulations using hundreds of space charge harmonics possible.
+
+To use this function open the file {\tt initialize.f90}, comment
+out the line {\tt call create\_frequency\_array(.true.)}, and comment
+in the line\\
+{\tt call create\_harmonic\_array(.true.)}. Recompile as
+described earlier in this section.
+
+
+\section{Contributing}
+See {\tt http://www.lmsuite.org}. Instructions
+will eventually be transferred to here.
+
+
+\section{To Do List}
+\subsection{Testing}
+Below are input scenarios for which the code has not been extensively tested.
+The code was written to handle the cases, but without testing one cannot
+be sure that the cases are handled correctly. If you are getting unexpected
+results from the code, have a look at this list to see if you are in
+``uncharted waters.'' Alternatively, if you would like to help test the
+code, consider putting it through its paces with any of the following
+input scenarios.
+\begin{enumerate}
+\item Space charge frequency range wider than circuit frequency range. Some
+  aspects to look at include plotting magnitudes and phases of the various
+  quantities. For example if choose to plot magnitude or phase of a circuit
+  quantity are only circuit frequencies included in the output, if choose to
+  plot a beam quantity do all space charge frequencies appear in the output.
+\item The space charge reduction formula for an annular beam has not been
+  tested.
+\item The dispersion scan ({\tt scanID = 4}) has not been tested extensively,
+  particularly for loss and space charge reduction factor.
+\end{enumerate}
+\subsection{Models}
+\begin{enumerate}
+\item LATTE
+  \begin{enumerate}
+  \item scan routines: beam parameter scan
+  \item plot routines:
+    phase\_vs\_z (velocity only), phase\_differences\_vs\_z (velocity only),
+    disk\_orbits\_vs\_z, conserved\_quantity\_vs\_z, beam\_energy\_vs\_z
+  \end{enumerate}
+\item MUSE
+  \begin{enumerate}
+  \item check that ${\bf V}$ matrix can be larger than number of space charge
+    frequencies
+  \item slowly varying envelope implementation
+  \item scan routines: beam parameter scan
+  \item plot routines:
+    conserved\_quantity\_vs\_z, beam\_energy\_vs\_z
+  \end{enumerate}
+\item S-MUSE
+  \begin{enumerate}
+  \item slowly varying envelope implementation
+  \item scan routines: beam parameter scan
+  \item plot routines:
+    conserved\_quantity\_vs\_z, beam\_energy\_vs\_z
+  \end{enumerate}
+\end{enumerate}
+\subsection{Physics}
+\begin{enumerate}
+\item modulated electron beam (need initial values of space charge electric
+  field $E$?)
+\item 2-d beam stuff, thermal spread
+\end{enumerate}
+\subsection{Helix}
+\begin{enumerate}
+\item Sheath helix solver
+\item Tape helix solver
+\item Loss model?
+\end{enumerate}
+\subsection{Beam}
+\begin{enumerate}
+\item Antonsen correction to space charge reduction factor
+\item DC space charge depression
+\item Relativistic effects
+\end{enumerate}
+\subsection{Namelist}
+\begin{enumerate}
+\item Test code defaults, i.e. remove {\tt lmsuite.nml}
+\item Put in dispersion and loss frequencies in real numbers (?) (Hz?)
+\end{enumerate}
+\subsection{Plotting}
+\begin{enumerate}
+\item Roll all single pass {\tt *\_vs\_freq} plots into one routine.
+\end{enumerate}
+\subsection{Numerical}
+\begin{enumerate}
+\item reduce arrays for circuit and space charge field to their minimum
+  number of elements
+\item implement adaptive stepsize (dormand-prince)
+\item implement linear multistep method (adams-bashford)
+\end{enumerate}
+\subsection{Compiler}
+\begin{enumerate}
+\item study optimization flags for all supported platforms
+\item g95 build
+\end{enumerate}
+
+\subsection{Documentation}
+\begin{enumerate}
+\item Register copyright, see http://www.gnu.org/licenses/gpl-howto.html
+  for instructions.
+\item compilation and installation instructions
+\item Manual
+\end{enumerate}
+
+\bibliographystyle{plain}
+\bibliography{../../../ResearchDocs/Refs.BibTeX/strings.bib,../../../ResearchDocs/Refs.BibTeX/others.bib,../../../ResearchDocs/Refs.BibTeX/papers.bib,../../../ResearchDocs/Refs.BibTeX/books.bib}
+
+\end{document}

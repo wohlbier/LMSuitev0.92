@@ -1,0 +1,71 @@
+####################################################################
+######  this is where compiler specific definitions are made #######
+####################################################################
+# comment/uncomment all settings depending on compiler choice
+# i.e. F90, F77, FFLAGS_LMSUITE, FFLAGS_LIBS, and CLEANUP
+
+# gfortran compiler. gfortran <= 4.8.2 fails with:
+# At line 754 of file parameters.f90 (unit = 2, file = './inputs/movies.nml')
+# Fortran runtime error: Cannot match namelist object name namelist)
+# A quick google indicates this is a gfortran compiler bug.
+#F90 = gfortran
+#F77 = gfortran
+##FFLAGS_LMSUITE = -g -O0
+##FFLAGS_LIBS = -g -O0
+#FFLAGS_LMSUITE = -O3
+#FFLAGS_LIBS = -O3
+#FFLAGS_LINK =
+
+# This is the only known compiler that works. "Tested" with version 14.0.4.
+# ifort.
+F90 = ifort
+F77 = ifort
+#FFLAGS_LMSUITE = -g -O0
+#FFLAGS_LIBS = -g -O0
+FFLAGS_LMSUITE = -O3
+FFLAGS_LIBS = -O3
+FFLAGS_LINK =
+
+CLEANUP =  *~ *.mod
+
+####################################################################
+## export the definitions to sub-make files
+export F90
+export F77
+export FFLAGS_LMSUITE
+export FFLAGS_LINK
+export FFLAGS_LIBS
+export CLEANUP
+####################################################################
+####################################################################
+
+
+#.PHONY tells make that clean is not a file target and assumes prerequisites
+#are satisfied. This feature is not present in all make utilities, so if
+#use something other than Gnu Make, may need to use "FORCE" empty target,
+#see make info.
+#the - in front of rm tells make to continue even if rm reports errors.
+
+#.PHONY : all
+all :
+	cd ../src; make -f makefile_linux; mv lmsuite ..
+
+.PHONY : realclean clean cleansrc cleanlib cleaninputs cleanoutputs
+realclean : clean
+	-cd ../; rm lmsuite
+
+clean : cleansrc cleaninputs cleanoutputs
+	-cd ../; rm $(CLEANUP);
+	-cd ./make_files/; rm $(CLEANUP)
+
+cleansrc :
+	-cd ../src; make -f makefile_linux clean
+
+cleanlib :
+	-cd ../src; make -f makefile_linux cleanlib
+
+cleaninputs:
+	- cd ../inputs; rm *~
+
+cleanoutputs:
+	- cd ../outputs; rm -r *

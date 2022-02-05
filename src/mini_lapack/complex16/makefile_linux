@@ -1,0 +1,22 @@
+# specify the object files
+OBJS = 	zgesv.o \
+	zgetf2.o \
+	zgetrf.o \
+	zgetrs.o \
+	zlaswp.o
+
+#implicit rule to tell how to make object files from *.f (f77) files
+%.o : %.f
+	$(F77) -c $(FFLAGS_LIBS) $*.f
+
+# make the library file
+libmini_lapack_Z_s : $(OBJS)
+	ar -r libmini_lapack_Z_s.a *.o;
+	ranlib libmini_lapack_Z_s.a
+
+# to clean up this library
+.PHONY : clean realclean
+clean :
+	-rm $(OBJS) $(CLEANUP)
+realclean : clean
+	-rm *.a

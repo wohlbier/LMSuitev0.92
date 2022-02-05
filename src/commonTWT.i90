@@ -1,0 +1,4212 @@
+!**************************************************************************!
+! This file is part of LATTE/MUSE Numerical Suite (lmsuite)
+!
+! lmsuite is free software; you can redistribute it and/or modify
+! it under the terms of the GNU General Public License as published by
+! the Free Software Foundation; either version 2 of the License, or
+! (at your option) any later version.
+!
+! lmsuite is distributed in the hope that it will be useful,
+! but WITHOUT ANY WARRANTY; without even the implied warranty of
+! MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+! GNU General Public License for more details.
+!
+! You should have received a copy of the GNU General Public License
+! along with lmsuite; if not, write to the Free Software
+! Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+!**************************************************************************!
+
+!*** this routine is common to all of the TWTmodules, so it knows about ***!
+!*** everything defined in those modules. ***!
+subroutine commonTWT()
+  use precision95
+  use working_variables, only : modelID
+  use working_variables, only : M
+  use working_variables, only : fl
+  use working_variables, only : OmegaAlpha
+  use working_variables, only : create_frequency_array
+  use working_variables, only : compute_dispersion_arrays
+  use working_variables, only : R_matrix
+  use working_variables, only : L_matrix
+  use working_variables, only : G_matrix
+  use working_variables, only : C_matrix
+  use working_variables, only : pC_matrix
+  use working_variables, only : derived_ckt_qtys
+  use working_variables, only : vph
+  use working_variables, only : K
+  use working_variables, only : pC
+  use working_variables, only : G
+  use working_variables, only : Ca
+  use working_variables, only : w0
+  use working_variables, only : N_disks
+  use working_variables, only : derived_qtys
+  use working_variables, only : first_ckt_index
+  use working_variables, only : last_ckt_index
+  use working_variables, only : first_spch_index
+  use working_variables, only : last_spch_index
+  use working_variables, only : num_ckt_freqs
+  use working_variables, only : num_spch_freqs
+  use working_variables, only : vs_z_plot
+  use working_variables, only : vs_freq_plot
+  use working_variables, only : vs_powin_plot
+  use working_variables, only : run_one
+  use working_variables, only : run_two
+  use working_variables, only : run_three
+  use working_variables, only : plot_cube
+  use working_variables, only : k_1
+  use working_variables, only : k_2
+  use working_variables, only : k_3
+  use working_variables, only : k_4
+  use working_variables, only : yk_1
+  use working_variables, only : yk_2
+  use working_variables, only : yk_3
+  use working_variables, only : y_nminus1
+  use working_variables, only : k_45
+  use working_variables, only : c_45
+  use working_variables, only : b_45
+  use working_variables, only : bhat_45
+  use working_variables, only : a_45
+  use working_variables, only : netE
+  use working_variables, only : rhol
+  use working_variables, only : exp_sum_real
+  use working_variables, only : exp_sum_imag
+  use working_variables, only : exp_real
+  use working_variables, only : exp_imag
+  use working_variables, only : thesis_V
+  use working_variables, only : thesis_w
+  use working_variables, only : ipiv
+
+  !! local variables
+  !! "outer" refers two the "outer loop" of a two parameter scan.
+  !! if a scan is only a single parameter scan, then it is still "outer"
+  logical :: outer_scan = .true.
+  integer :: dummy
+
+  ! do only single pass
+  if (run_parameters % num_scan_namelists == 0) then
+
+     if (modelID=='L' .and. run_parameters % dc_constant) then
+        !run the model 1x and correct velocities
+        call latte_dc_constant(n_eqns)
+     end if
+
+     call single_pass_only
+
+  else
+     do i = 1, run_parameters % num_scan_namelists
+        !! check that previous scan had two_parameter == false, if not
+        !! it is the "inner" scan and isn't called here.
+        if (i == 1) then
+           outer_scan = .true.
+        else if (i >= 2 .and. .not. &
+             run_parameters % scan_data_array(i-1) % two_parameter) then
+           outer_scan = .true.
+        else
+           outer_scan = .false.
+        end if
+
+        if (outer_scan) then
+           dummy = 1 !!serves role of third parameter when calling a scan
+           if (run_parameters % scan_data_array(i) % scanID == 1) then
+              call input_power_scan(i,outer_scan,dummy)
+           else if (run_parameters % scan_data_array(i) % scanID == 2) then
+              call input_phase_scan(i,outer_scan)
+           else if (run_parameters % scan_data_array(i) % scanID == 3) then
+              call frequency_scan(i,outer_scan)
+           else if (run_parameters % scan_data_array(i) % scanID == 4) then
+              call dispersion_scan(i,outer_scan,dummy)
+           else if (run_parameters % scan_data_array(i) % scanID == 5) then
+              call beam_scan(i,outer_scan)
+           end if
+        end if
+     end do
+  end if
+contains
+
+  !***************************  scan routines  *************************!
+  subroutine single_pass_only
+    if (run_two) then
+       print*, 'Running single pass only'
+    end if
+
+    !! compute the initial vector and normalize it
+    if (modelID == 'L') then
+       call init_latte_vector(y)
+       call norm_latte_vector(y)
+    else
+       call init_muse_vector(y)
+       call norm_muse_vector(y)
+    end if
+
+    !! allocate plot_cube for single pass, first index is of size 1
+    if (vs_z_plot) then
+       !! if any of the *_vs_z plots are selected, allocate the plot_cube
+       !! with 2nd coordinate size num_axial_points
+       allocate(plot_cube(1, output_parameters % num_axial_points, n_eqns))
+    else
+       !! otherwise allocate the plot_cube for just input/output vectors
+       allocate(plot_cube(1, 2, n_eqns))
+    end if
+
+    if (run_parameters % compute_reflections) then
+       !! send pass_number = 1
+       call shooting_method(1)
+    else
+       !! send pass_number = 1
+       call singlepass(1)
+    end if
+
+    !! make a vs_freq_plots routine
+
+    !! generate plots
+    if (output_parameters % power_out_vs_freq) then
+       call power_out_vs_freq(y,0)
+    end if
+    if (output_parameters % phase_vs_freq) then
+       call phase_vs_freq(y,0)
+    end if
+
+    if (vs_z_plot) then
+       !! need to add a parameter to tell which first index of
+       !! plot_cube to use
+       call vs_z_plots(plot_cube,0)
+    end if
+
+    if (output_parameters % disk_orbits_vs_z .and. modelID=='L') then
+       call disk_orbits(plot_cube)
+    end if
+
+    if (output_parameters % phase_space) then
+       call phase_space(plot_cube)
+    end if
+
+    if (run_parameters % num_movie_namelists > 0) then
+       call make_frames(plot_cube,n_eqns)
+    end if
+
+    deallocate(plot_cube)
+  end subroutine single_pass_only
+
+  !! THIS ROUTINE WORKS as outside loop of TWO_PARAMETER
+  subroutine input_power_scan(scanNumber, outer_scan, time_called)
+    integer, intent(in) :: scanNumber !use this integer in file name
+    !true if "outer loop" of two parameter scan, or just single parameter scan
+    logical, intent(in) :: outer_scan
+    integer, intent(inout) :: time_called
+    
+    !! local variables
+    logical :: outer_of_two
+    integer :: i, j, freq_ind, input_index, offset
+    real(dp) :: deltaP, P_min, P_max, tmpP, a, b, emin, emax
+    real(dp) :: origPower, origPhase
+
+    if (run_two) then
+       print*, 'Running input power scan.'
+    end if
+
+    ! if outer_scan is false, then this is the "inner" of a two parameter scan.
+    ! if outer_scan is true, this could be the "outer" of a two parameter scan,
+    ! or it could be a single parameter scan. therefore set "outer_of_two"
+    ! = true if outer_scan = true AND two_parameter = true.
+    outer_of_two = outer_scan .and. &
+         run_parameters % scan_data_array(scanNumber) % two_parameter
+
+    !! check to make sure second scan exists
+    if (outer_of_two .and. &
+         scanNumber+1 > run_parameters % num_scan_namelists) then
+       print*, 'Two parameter scan selected, but second scan not supplied. Aborting scan.'
+       return
+    end if
+
+    !!allocate the plot_cube only if this is not an inner scan
+    if (outer_scan) then
+       if (outer_of_two) then
+          !! for outer scan
+          if (vs_z_plot) then
+             allocate(plot_cube(run_parameters % &
+                  scan_data_array(scanNumber) % num_points &
+                  * run_parameters % scan_data_array(scanNumber+1) &
+                  % num_points, &
+                  output_parameters % num_axial_points, n_eqns))
+          else
+             allocate(plot_cube(run_parameters % &
+                  scan_data_array(scanNumber) % num_points &
+                  * run_parameters % scan_data_array(scanNumber+1) &
+                  % num_points, 2, n_eqns))
+          end if
+       else
+          !! this is a single parameter scan
+          if (vs_z_plot) then
+             allocate(plot_cube(run_parameters % &
+                  scan_data_array(scanNumber) % num_points, &
+                  output_parameters % num_axial_points, n_eqns))
+          else
+             allocate(plot_cube(run_parameters % &
+                  scan_data_array(scanNumber) % num_points, 2, n_eqns))
+          end if
+       end if
+    end if
+
+    !! find the input index of the frequency to be scanned
+    input_index = 0
+    do i = 1, frequency_parameters % num_input_freqs
+       if (frequency_parameters % frequency_integer(i) == &
+            run_parameters % scan_data_array(scanNumber) % int_param_1) then
+          input_index = i
+       end if
+    end do
+
+    !! exit the routine if the frequency isn't found
+    if (input_index == 0) then
+       print*, 'In scan #', scanNumber,':'
+       print*, 'int_param_1 is not equal to an input frequency.'
+       print*, 'Skipping scan'
+       !! deallocate the plot_cube
+       deallocate(plot_cube)
+       return
+    end if
+
+    !! find the index in fl() of the frequency to be scanned
+    freq_ind = 0
+    do i = 0, M
+       if (fl(i) == &
+            run_parameters % scan_data_array(scanNumber) % int_param_1) then
+          freq_ind = i
+       end if
+    end do
+
+    !! exit the routine if the frequency isn't found
+    if (freq_ind == 0) then
+       print*, 'In scan #', scanNumber,':'
+       print*, 'int_param_1 is not equal to a frequency in fl().'
+       print*, 'Skipping scan'
+       !! deallocate the plot_cube
+       deallocate(plot_cube)
+       return
+    end if
+
+    P_min = run_parameters % scan_data_array(scanNumber) % min
+    P_max = run_parameters % scan_data_array(scanNumber) % max
+    if (units_structure % input_power_dBm) then
+       P_min = 0.001 * (10.0 ** (P_min/10.0))
+       P_max = 0.001 * (10.0 ** (P_max/10.0))
+    end if
+    !! compute the change in power from scan to scan
+    if (run_parameters % scan_data_array(scanNumber) % distribute_log) then
+       emin = floor(log10(P_min))
+       emax = floor(log10(P_max))
+       a = 10.0**(log10(P_min)-emin)
+       b = 10.0**(log10(P_max)-emax)
+       deltaP = 10.0**((emax-emin+log10(b/a)) &
+            /(run_parameters % scan_data_array(scanNumber) % num_points-1))
+    else
+       deltaP = (P_max - P_min) &
+            /(run_parameters % scan_data_array(scanNumber) % num_points - 1)
+    end if
+    tmpP = P_min
+
+    !! save power and phase values read from frequency namelist to restore
+    origPower = frequency_parameters % power_input(input_index)
+    origPhase = frequency_parameters % phase_input(input_index)
+    
+    !!offset is used to pass a value to the integration routine, so that
+    !!data is loaded into the proper position of plot_cube
+    offset = (time_called - 1) &
+         *run_parameters % scan_data_array(scanNumber) % num_points
+
+    do i = 1, run_parameters % scan_data_array(scanNumber) % num_points
+       if (run_two) then
+          print "(' Scan #', I3, ', pass ', I4, ' of ', I4)", scanNumber, i, &
+               run_parameters % scan_data_array(scanNumber) % num_points
+       end if
+
+       !! put the new data into the power_input and phase_input vectors
+       frequency_parameters % power_input(input_index) = tmpP
+       if (units_structure % phase_degrees) then
+          frequency_parameters % phase_input(input_index) = &
+               run_parameters % scan_data_array(scanNumber) &
+               % real_param_1*pi/180.0
+       else
+          frequency_parameters % phase_input(input_index) = &
+               run_parameters % scan_data_array(scanNumber) &
+               % real_param_1
+       end if
+
+       !! compute the initial vector and normalize it
+       if (modelID == 'L') then
+          call init_latte_vector(y)
+          call norm_latte_vector(y)
+       else
+          call init_muse_vector(y)
+          call norm_muse_vector(y)
+       end if
+
+       !! call two parameter scan or single parameter scan
+       if (outer_of_two) then
+          !! call the second parameter of the two parameter scan, passing
+          !! .false. to let scanning routine know it is an inner loop
+          if (run_parameters % scan_data_array(scanNumber+1) % scanID &
+               == 4) then
+             call dispersion_scan(scanNumber+1,.false.,i)
+          end if
+       else !! just single parameter scan
+          if (run_parameters % compute_reflections) then
+             ! i = pass_number, first coordinate of plot_cube
+             ! if this is the inner loop, time_called is outer loop index
+             call shooting_method(i+offset)
+          else
+
+             if (modelID=='L' .and. run_parameters % dc_constant) then
+                !run the model 1x and correct velocities
+                call latte_dc_constant(n_eqns)
+             end if
+
+             ! i = pass_number, first coordinate of plot_cube
+             ! if this is the inner loop, time_called is outer loop index
+             call singlepass(i+offset)
+          end if
+       end if
+
+       !! advance the input power
+       if (run_parameters % scan_data_array(scanNumber) % distribute_log) then
+          tmpP = tmpP * deltaP
+       else
+          tmpP = tmpP + deltaP
+       end if
+    end do
+
+    !! restore power and phase values read from frequency namelist
+    frequency_parameters % power_input(input_index) = origPower
+    frequency_parameters % phase_input(input_index) = origPhase
+
+    !!make plots if outer scan, or if single parameter scan
+    if (outer_of_two .or. outer_scan) then    
+       !! make the vs_power_in plots
+       if (vs_powin_plot) then
+          call vs_power_in_plots(plot_cube, scanNumber, freq_ind, outer_of_two)
+       end if
+    
+       !!make the versus z plots
+       !!don't know what this makes when outer_of_two!!!!!!?!?!?!?!
+       !!for now, don't allow it to be called
+       if (vs_z_plot .and. .not. outer_of_two) then
+          call vs_z_plots(plot_cube, scanNumber)
+       end if
+       
+       !! deallocate the plot_cube
+       deallocate(plot_cube)
+    end if
+  end subroutine input_power_scan
+
+  !! THIS ROUTINE DOES NOT WORK WITH TWO_PARAMETER
+  subroutine input_phase_scan(scanNumber, outer_scan)
+    integer, intent(in) :: scanNumber !use this integer in file name
+    !true if "outer loop" of two parameter scan, or just single parameter scan
+    logical, intent(in) :: outer_scan
+    
+    !! local variables
+    logical :: outer_of_two
+    integer :: i, j, freq_ind, input_index
+    real(dp) :: deltaPhase, Phase_min, Phase_max, tmpPhase
+    real(dp) :: origPower, origPhase
+
+    if (run_two) then
+       print*, 'Running input phase scan.'
+    end if
+
+    ! if outer_scan is false, then this is the "inner" of a two parameter scan.
+    ! if outer_scan is true, this could be the "outer" of a two parameter scan,
+    ! or it could be a single parameter scan. therefore set "outer_of_two"
+    ! = true if outer_scan = true AND two_parameter = true.
+    outer_of_two = outer_scan .and. &
+         run_parameters % scan_data_array(scanNumber) % two_parameter
+
+    !!allocate the plot_cube only if this is not an inner scan
+    if (outer_scan) then
+       if (outer_of_two) then
+          !! this is for outer scan
+       else
+          !! this is a single parameter scan
+          if (vs_z_plot) then
+             allocate(plot_cube(run_parameters % &
+                  scan_data_array(scanNumber) % num_points, &
+                  output_parameters % num_axial_points, n_eqns))
+          else
+             allocate(plot_cube(run_parameters % &
+                  scan_data_array(scanNumber) % num_points, 2, n_eqns))
+          end if
+       end if
+    end if
+
+    !! find the input index of the frequency to be scanned
+    input_index = 0
+    do i = 1, frequency_parameters % num_input_freqs
+       if (frequency_parameters % frequency_integer(i) == &
+            run_parameters % scan_data_array(scanNumber) % int_param_1) then
+          input_index = i
+       end if
+    end do
+
+    !! exit the routine if the frequency isn't found
+    if (input_index == 0) then
+       print*, 'In scan #', scanNumber,':'
+       print*, 'int_param_1 is not equal to an input frequency.'
+       print*, 'Skipping scan'
+       !! deallocate the plot_cube
+       deallocate(plot_cube)
+       return
+    end if
+
+    !! find the index in fl() of the frequency to be scanned
+    freq_ind = 0
+    do i = 0, M
+       if (fl(i) == &
+            run_parameters % scan_data_array(scanNumber) % int_param_1) then
+          freq_ind = i
+       end if
+    end do
+
+    !! exit the routine if the frequency isn't found
+    if (freq_ind == 0) then
+       print*, 'In scan #', scanNumber,':'
+       print*, 'int_param_1 is not equal to a frequency in fl().'
+       print*, 'Skipping scan'
+       !! deallocate the plot_cube
+       deallocate(plot_cube)
+       return
+    end if
+
+    Phase_min = run_parameters % scan_data_array(scanNumber) % min
+    Phase_max = run_parameters % scan_data_array(scanNumber) % max
+    if (units_structure % phase_degrees) then
+       Phase_min = Phase_min * pi/180.0
+       Phase_max = Phase_max * pi/180.0
+    end if
+
+    !! set the step in phase
+    deltaPhase = (Phase_max - Phase_min) &
+            /(run_parameters % scan_data_array(scanNumber) % num_points - 1)
+    !! start at Phase_min
+    tmpPhase = Phase_min
+
+    !! save power and phase values read from frequency namelist to restore
+    origPower = frequency_parameters % power_input(input_index)
+    origPhase = frequency_parameters % phase_input(input_index)
+
+    do i = 1, run_parameters % scan_data_array(scanNumber) % num_points
+       if (run_two) then
+          print "(' Scan #', I3, ', pass ', I4, ' of ', I4)", scanNumber, i, &
+               run_parameters % scan_data_array(scanNumber) % num_points
+       end if
+
+       !! this stuff to be changed to handle two parameter scans
+
+       !! put the new data into the power_input and phase_input vectors
+       frequency_parameters % phase_input(input_index) = tmpPhase
+       if (units_structure % input_power_dBm) then
+          frequency_parameters % power_input(input_index) = &
+               0.001*10.0**(run_parameters % scan_data_array(scanNumber) &
+               % real_param_1/10.0)
+       else
+          frequency_parameters % power_input(input_index) = &
+               run_parameters % scan_data_array(scanNumber) &
+               % real_param_1
+       end if
+       !! compute the initial vector and normalize it
+       if (modelID == 'L') then
+          call init_latte_vector(y)
+          call norm_latte_vector(y)
+       else
+          call init_muse_vector(y)
+          call norm_muse_vector(y)
+       end if
+
+       !! call two parameter scan or single parameter scan
+       if (run_parameters % scan_data_array(scanNumber) % two_parameter) then
+          !! check to make sure second scan list exists.
+          if (scanNumber+1 > run_parameters % num_scan_namelists) then
+             print*, 'Two parameter scan selected, but second scan not supplied. Aborting scan.'
+             !! deallocate the plot_cube
+             deallocate(plot_cube)
+             return
+          end if
+          !! call the second parameter of the two parameter scan
+          !call input_phase_scan(scanNumber+1,.false.)
+       else !! just single parameter scan
+          if (run_parameters % compute_reflections) then
+             ! i = pass_number, first coordinate of plot_cube
+             call shooting_method(i)
+          else
+             ! i = pass_number, first coordinate of plot_cube
+             call singlepass(i)
+          end if
+       end if
+
+       !! advance the input phase
+       tmpPhase = tmpPhase + deltaPhase
+    end do
+
+    !! restore power and phase values read from frequency namelist
+    frequency_parameters % power_input(input_index) = origPower
+    frequency_parameters % phase_input(input_index) = origPhase
+
+    !! make the plots
+    if (output_parameters % power_out_vs_phase_in) then
+       call power_out_vs_phase_in(plot_cube, scanNumber, freq_ind)
+    end if
+
+    !! make the plots
+    if (output_parameters % phase_out_vs_phase_in) then
+       call phase_out_vs_phase_in(plot_cube, scanNumber, freq_ind)
+    end if
+
+    !! axial plots
+    if (vs_z_plot) then
+       call vs_z_plots(plot_cube, scanNumber)
+    end if
+
+    !! deallocate the plot_cube
+    deallocate(plot_cube)
+  end subroutine input_phase_scan
+
+  subroutine frequency_scan(scanNumber, outer_scan)
+    integer, intent(in) :: scanNumber !use this integer in file name
+    !true if "outer loop" of two parameter scan, or just single parameter scan
+    logical, intent(in) :: outer_scan
+
+    integer :: i, j
+    integer :: freq_index, orig_int, min_fi, max_fi, npts, tmp_fi, delta_fi
+
+    if (run_two) then
+       print*, 'Running frequency scan.'
+    end if
+
+    min_fi = run_parameters % scan_data_array(scanNumber) % min
+    max_fi = run_parameters % scan_data_array(scanNumber) % max
+    npts = run_parameters % scan_data_array(scanNumber) % num_points
+
+    !! the index of frequency_integer being scanned
+    freq_index = run_parameters % scan_data_array(scanNumber) % int_param_1
+
+    !! check if the index is between 1 and num_input_freqs
+    if (freq_index < 1 .or. &
+         freq_index > frequency_parameters % num_input_freqs) then
+       print*, 'In scan #', scanNumber,':'
+       print*, 'int_param_1 is not between 1 and num_input_freqs.'
+       print*, 'Skipping scan'
+       return
+    end if
+
+    !! save the original frequency_integer
+    orig_int = frequency_parameters % frequency_integer(freq_index)
+
+    !! check that the min frequency integer is greater than the one below it
+    if (freq_index > 1 .and. &
+         freq_index <= frequency_parameters % num_input_freqs) then
+       if (min_fi <= &
+            frequency_parameters % frequency_integer(freq_index - 1)) then
+          print*, 'In scan #', scanNumber,':'
+          print*, 'min is less than or equal to the frequency_integer indexed by', freq_index - 1
+          print*, 'Skipping scan'
+          return
+       end if
+    end if
+
+    !! check that the max frequency integer is less that the one above it
+    if (freq_index < frequency_parameters % num_input_freqs) then
+       if (max_fi >= &
+            frequency_parameters % frequency_integer(freq_index + 1)) then
+          print*, 'In scan #', scanNumber,':'
+          print*, 'max is greater than or equal to the frequency_integer indexed by', freq_index + 1
+          print*, 'Skipping scan'
+          return
+       end if
+    end if
+
+    !! check that min is greater than or equal to min_ckt_freq
+    if (min_fi < frequency_parameters % min_ckt_freq) then
+          print*, 'In scan #', scanNumber,':'
+          print*, 'min is less than min_ckt_freq'
+          print*, 'Skipping scan'
+          return
+    end if
+
+    !! check that max is less than max_ckt_freq
+    if (max_fi > frequency_parameters % max_ckt_freq) then
+          print*, 'In scan #', scanNumber,':'
+          print*, 'max is greater than max_ckt_freq'
+          print*, 'Skipping scan'
+          return
+    end if
+
+    !! allocate the plot cube
+    !! this is a single parameter scan
+    if (vs_z_plot) then
+       allocate(plot_cube(run_parameters % &
+            scan_data_array(scanNumber) % num_points, &
+            output_parameters % num_axial_points, n_eqns))
+    else
+       allocate(plot_cube(run_parameters % &
+            scan_data_array(scanNumber) % num_points, 2, n_eqns))
+    end if
+
+
+    delta_fi = (max_fi - min_fi)/(npts - 1)
+    tmp_fi = min_fi
+
+    do i = 1, npts
+       !! in final loop force tmp_fi to be max_fi in case delta_fi off a bit
+       if (i == npts) then
+          tmp_fi = max_fi
+       end if
+
+       if (run_two) then
+          print "(' Scan #', I3, ', pass ', I4, ' of ', I4)", scanNumber, i, &
+               run_parameters % scan_data_array(scanNumber) % num_points
+       end if
+
+       !! assign the tmp_fi to the frequency integer array
+       frequency_parameters % frequency_integer(freq_index) = tmp_fi
+
+       !! recompute frequencies
+       ! destroy fl array
+       deallocate(fl)
+       ! make new fl array
+       call create_frequency_array(.false.)
+
+       !print*, 'the new frequencies are'
+       !do j = 1, M
+       !print*, fl(j)
+       !end do
+
+       !! recompute dispersion
+       call compute_dispersion_arrays
+       call derived_ckt_qtys(R_matrix, L_matrix, G_matrix, C_matrix, pC_matrix)
+       
+       !! compute the initial vector and normalize it
+       if (modelID == 'L') then
+          call init_latte_vector(y)
+          call norm_latte_vector(y)
+       else
+          call init_muse_vector(y)
+          call norm_muse_vector(y)
+       end if
+
+       !! call integration
+       if (run_parameters % compute_reflections) then
+          ! i = pass_number, first coordinate of plot_cube
+          call shooting_method(i)
+       else
+          ! i = pass_number, first coordinate of plot_cube
+          call singlepass(i)
+       end if
+
+       tmp_fi = tmp_fi + delta_fi
+    end do
+
+    !! write results to file
+    call frequency_scan_plots(plot_cube, scanNumber)
+
+    !! free up the plot_cube
+    deallocate(plot_cube)
+
+    !! replace the original frequency_integer
+    frequency_parameters % frequency_integer(freq_index) = orig_int
+
+    !! recompute dispersion
+    call compute_dispersion_arrays
+    call derived_ckt_qtys(R_matrix, L_matrix, G_matrix, C_matrix, pC_matrix)
+
+  end subroutine frequency_scan
+
+  subroutine dispersion_scan(scanNumber, outer_scan, time_called)
+    integer, intent(in) :: scanNumber !use this integer in file name
+    !true if "outer loop" of two parameter scan, or just single parameter scan
+    logical, intent(in) :: outer_scan
+    integer, intent(inout) :: time_called
+    !! local variables
+    logical :: outer_of_two
+    integer :: i, j, disp_freq_ind, tmpSection, offset
+    real(dp) :: deltaDisp, Disp_min, Disp_max, tmpDisp
+    real(dp) :: origDisp
+
+    if (run_two) then
+       print*, 'Running dispersion scan.'
+    end if
+
+    ! if outer_scan is false, then this is the "inner" of a two parameter scan.
+    ! if outer_scan is true, this could be the "outer" of a two parameter scan,
+    ! or it could be a single parameter scan. therefore set "outer_of_two"
+    ! = true if outer_scan = true AND two_parameter = true.
+    outer_of_two = outer_scan .and. &
+         run_parameters % scan_data_array(scanNumber) % two_parameter
+
+    !! check to make sure second scan exists
+    if (outer_of_two .and. &
+         scanNumber+1 > run_parameters % num_scan_namelists) then
+       print*, 'Two parameter scan selected, but second scan not supplied. Aborting scan.'
+       return
+    end if
+
+    !!allocate the plot_cube only if this is not an inner scan
+    if (outer_scan) then
+       if (outer_of_two) then
+          !! for outer scan
+          if (vs_z_plot) then
+             allocate(plot_cube(run_parameters % &
+                  scan_data_array(scanNumber) % num_points &
+                  * run_parameters % scan_data_array(scanNumber+1) &
+                  % num_points, &
+                  output_parameters % num_axial_points, n_eqns))
+          else
+             allocate(plot_cube(run_parameters % &
+                  scan_data_array(scanNumber) % num_points &
+                  * run_parameters % scan_data_array(scanNumber+1) &
+                  % num_points, 2, n_eqns))
+          end if
+       else
+          !! this is a single parameter scan
+          if (vs_z_plot) then
+             allocate(plot_cube(run_parameters % &
+                  scan_data_array(scanNumber) % num_points, &
+                  output_parameters % num_axial_points, n_eqns))
+          else
+             allocate(plot_cube(run_parameters % &
+                  scan_data_array(scanNumber) % num_points, 2, n_eqns))
+          end if
+       end if
+    end if
+
+    !! section where scanning is to happen
+    tmpSection = run_parameters % scan_data_array(scanNumber) % int_param_3
+    !! find the index of the frequency to be scanned
+    disp_freq_ind = 0
+    if (run_parameters % scan_data_array(scanNumber) % int_param_2 == 1 .or. &
+         run_parameters % scan_data_array(scanNumber) % int_param_2 == 2 .or. &
+         run_parameters % scan_data_array(scanNumber) % int_param_2 == 4) then
+       !!phase velocity, interaction impedance or spchredfact
+       do i = 1, dispersion_parameters % num_dispersion_freqs
+          if (tmpSection > circuit_parameters % number_ckt_sections) then
+             print*, 'In scan #', scanNumber,':'
+             print*, 'int_param_3 is larger than number_ckt_sections.'
+             print*, 'Skipping scan'
+             !! deallocate the plot_cube
+             deallocate(plot_cube)
+             return
+          end if
+          if (dispersion_parameters % dispersion_freq_integer(tmpSection,i) &
+               == &
+               run_parameters % scan_data_array(scanNumber) % int_param_1) then
+             disp_freq_ind = i
+          end if
+       end do
+    else
+       !!loss
+       if (tmpSection <= loss_parameters % number_loss_locations) then
+          print*, 'In scan #', scanNumber,':'
+          print*, 'int_param_3 is larger than number_loss_locations.'
+          print*, 'Skipping scan'
+          !! deallocate the plot_cube
+          deallocate(plot_cube)
+          return
+       end if
+       do i = 1, loss_parameters % number_loss_freqs
+          if (loss_parameters % loss_freq_integer(tmpSection,i) == &
+               run_parameters % scan_data_array(scanNumber) % int_param_1) then
+             disp_freq_ind = i
+          end if
+       end do
+    end if
+
+    !! exit the routine if the frequency isn't found
+    if (disp_freq_ind == 0) then
+       print*, 'In scan #', scanNumber,':'
+       print*, 'int_param_1 is not equal to a dispersion_freq_integer or a loss_freq_integer.'
+       print*, 'Skipping scan'
+       !! deallocate the plot_cube
+       deallocate(plot_cube)
+       return
+    end if
+
+    Disp_min = run_parameters % scan_data_array(scanNumber) % min
+    Disp_max = run_parameters % scan_data_array(scanNumber) % max
+
+    if (run_parameters % scan_data_array(scanNumber) % int_param_2 == 1) then
+       !! phase_velocity
+       if (units_structure % length_cm) then
+          Disp_min = run_parameters % scan_data_array(scanNumber) % min / 100.0
+          Disp_max = run_parameters % scan_data_array(scanNumber) % max / 100.0
+       end if
+       ! highest priority: if vph_over_c convert to m/s
+       if (dispersion_parameters % vph_over_c) then
+          Disp_min = run_parameters % scan_data_array(scanNumber) % min * c
+          Disp_max = run_parameters % scan_data_array(scanNumber) % max * c
+       end if
+    else if (run_parameters % scan_data_array(scanNumber) &
+         % int_param_2 == 3) then
+       !! loss
+       if (.not. units_structure % nepers) then
+          Disp_min = Disp_min / 8.68589
+          Disp_max = Disp_max / 8.68589
+       end if
+       if (units_structure % length_cm) then
+          Disp_min = Disp_min * 100.0
+          Disp_max = Disp_max * 100.0
+       end if
+    end if
+
+    deltaDisp = (Disp_max - Disp_min) &
+         /(run_parameters % scan_data_array(scanNumber) % num_points - 1)
+
+    tmpDisp = Disp_min
+
+    !! save dispersion values read from dispersion matrices to restore
+    if (run_parameters % scan_data_array(scanNumber) % int_param_2 == 1) then
+       !! phase_velocity
+       origDisp = dispersion_parameters % phase_velocity(tmpSection, &
+            disp_freq_ind)
+    else if &
+         (run_parameters % scan_data_array(scanNumber) % int_param_2 == 2) then
+       !! impedance
+       origDisp = dispersion_parameters % impedance(tmpSection, disp_freq_ind)
+    else if &
+         (run_parameters % scan_data_array(scanNumber) % int_param_2 == 3) then
+       !! losses
+       origDisp = loss_parameters % loss(tmpSection, disp_freq_ind)
+    else if &
+         (run_parameters % scan_data_array(scanNumber) % int_param_2 == 4) then
+       !! space_charge_redux
+       origDisp = dispersion_parameters % space_charge_redux(tmpSection, &
+            disp_freq_ind)
+    end if
+
+    !!offset is used to pass a value to the integration routine, so that
+    !!data is loaded into the proper position of plot_cube
+    offset = (time_called - 1) &
+         *run_parameters % scan_data_array(scanNumber) % num_points
+
+    do i = 1, run_parameters % scan_data_array(scanNumber) % num_points
+       if (run_two) then
+          print "(' Scan #', I3, ', pass ', I4, ' of ', I4)", scanNumber, i, &
+               run_parameters % scan_data_array(scanNumber) % num_points
+       end if
+
+       !! put the new data into the dispersion
+       !! if add intrplt_btwn_points to dispersion, will have to add
+       !! conditionals to int_param_1 == 1,2,4. see int_param_3.
+       if (run_parameters % scan_data_array(scanNumber) % &
+            int_param_2 == 1) then
+          !! phase_velocity
+          dispersion_parameters % phase_velocity(tmpSection, disp_freq_ind) &
+               = tmpDisp
+       else if (run_parameters % scan_data_array(scanNumber) % &
+            int_param_2 == 2) then
+          !! impedance
+          dispersion_parameters % impedance(tmpSection, disp_freq_ind) &
+               = tmpDisp
+       else if (run_parameters % scan_data_array(scanNumber) % &
+            int_param_2 == 3) then
+          !! losses
+          loss_parameters % loss(tmpSection, disp_freq_ind) = tmpDisp
+          if (loss_parameters % intrplt_btwn_points .and. &
+               tmpSection+1<=loss_parameters % number_loss_locations) then
+             loss_parameters % loss(tmpSection+1, disp_freq_ind) = tmpDisp
+          else if (tmpSection+1>loss_parameters % number_loss_locations) then
+             print*, 'In scan #', scanNumber,':'
+             print*, 'Using intrplt_btwn_points and int_param_3 + 1 is larger'
+             print*, 'than number_loss_locations. Skipping scan.'
+             !! deallocate the plot_cube
+             deallocate(plot_cube)
+             return
+          end if
+       else if (run_parameters % scan_data_array(scanNumber) % &
+            int_param_2 == 4) then
+          !! space_charge_redux
+          dispersion_parameters % space_charge_redux(tmpSection, &
+               disp_freq_ind) = tmpDisp
+       end if
+
+       !! recompute dispersion
+       call compute_dispersion_arrays
+       call derived_ckt_qtys(R_matrix, L_matrix, G_matrix, C_matrix,&
+            pC_matrix)
+
+       !! compute the initial vector and normalize it
+       if (modelID == 'L') then
+          call init_latte_vector(y)
+          call norm_latte_vector(y)
+       else
+          call init_muse_vector(y)
+          call norm_muse_vector(y)
+       end if
+
+       !! call two parameter scan or single parameter scan
+       if (run_parameters % scan_data_array(scanNumber) % two_parameter) then
+          !! call the second parameter of the two parameter scan
+          !call input_phase_scan(scanNumber+1,.false.,i)
+       else !! just single parameter scan
+          if (run_parameters % compute_reflections) then
+             ! i = pass_number, first coordinate of plot_cube
+             ! if this is the inner loop, time_called is outer loop index
+             call shooting_method(i+offset)
+          else
+             ! i = pass_number, first coordinate of plot_cube
+             ! if this is the inner loop, time_called is outer loop index
+             call singlepass(i+offset)
+          end if
+       end if
+
+       !! advance the parameter
+       tmpDisp = tmpDisp + deltaDisp
+    end do
+
+    !! restore original dispersion values
+    if (run_parameters % scan_data_array(scanNumber) % int_param_2 == 1) then
+       !! phase_velocity
+       dispersion_parameters % phase_velocity(tmpSection, disp_freq_ind) &
+            = origDisp
+    else if (run_parameters % scan_data_array(scanNumber) % &
+         int_param_2 == 2) then
+       !! impedance
+       dispersion_parameters % impedance(tmpSection, disp_freq_ind) &
+            = origDisp
+    else if (run_parameters % scan_data_array(scanNumber) % &
+         int_param_2 == 3) then
+       !! losses
+       loss_parameters % loss(tmpSection, disp_freq_ind) = origDisp
+       if (loss_parameters % intrplt_btwn_points .and. &
+            tmpSection+1<=loss_parameters % number_loss_locations) then
+          loss_parameters % loss(tmpSection+1, disp_freq_ind) = origDisp
+       end if
+    else if (run_parameters % scan_data_array(scanNumber) % &
+         int_param_2 == 4) then
+       !! space_charge_redux
+       dispersion_parameters % space_charge_redux(tmpSection, disp_freq_ind) &
+            = origDisp
+    end if
+
+    !! recompute dispersion with the new values
+    call compute_dispersion_arrays
+    call derived_ckt_qtys(R_matrix, L_matrix, G_matrix, C_matrix,&
+            pC_matrix)
+
+    if (outer_of_two .or. outer_scan) then
+       !! make the plots
+       call vs_z_plots(plot_cube, scanNumber)
+       
+       !! deallocate the plot_cube
+       deallocate(plot_cube)
+    end if
+
+  end subroutine dispersion_scan
+
+  subroutine beam_scan(scanNumber, outer_scan)
+    integer, intent(in) :: scanNumber !use this integer in file name
+    !true if "outer loop" of two parameter scan, or just single parameter scan
+    logical, intent(in) :: outer_scan
+
+  end subroutine beam_scan
+
+  !***************************  plot routines  *************************!
+  subroutine vs_z_plots(plot_cube, scanNumber)
+    use working_variables, only : find_freq
+
+    complex(dp), dimension(:,:,:), intent(in) :: plot_cube
+    integer, intent(in) :: scanNumber
+  
+    !local variables
+    logical :: dispersion_scan_flag = .false.
+    character(len=40) :: filename
+    integer :: i, ii, j, kk, l, pd1, pd2, tmpNumPoints
+    real(dp) :: z, dz, scale, h, tmpPower, tmpMag, tmpPhase, origDisp, &
+         tmpvhot, tmpdcvel, tmptmpdcvel, tmpmoddcvel, tmptmpmoddcvel, &
+         tmpdthetadz
+    complex(dp), dimension(:), allocatable :: tmpY, tmpmodY, tmpCmplx1, &
+         tmpCmplx2
+    complex(dp) :: phase_factor, rhol, ibeaml, tmpQty1, tmpQty2    
+
+    if (run_two) then !!tell the user which *_vs_z plots generated
+       if (output_parameters % circuit_power_vs_z) then
+          print*, '  generating pow_vs_z.X.N.dat file'
+       end if
+       if (output_parameters % magnitude_vs_z) then
+          print*, '  generating mag_vs_z.X.N.dat file'
+       end if
+       if (output_parameters % phase_vs_z) then
+          print*, '  generating phase_vs_z.X.N.dat'
+       end if
+       if (output_parameters % phase_differences_vs_z) then
+          print*, '  generating phase_diff_vs_z.X.N.dat'
+       end if
+       if (output_parameters % hot_phase_velocity_vs_z) then
+          print*, '  generating hot_vel_vs_z.X.N.dat'
+       end if
+       if (output_parameters % dc_beam_vel_vs_z) then
+          print*, '  generating dcbeam_vs_z.X.N.dat'
+       end if
+    end if
+
+    !! set up the z step information
+    dz = circuit_parameters % circuit_length &
+         / (output_parameters % num_axial_points - 1)
+
+    !! multiply scale by z for length in output file
+    if (units_structure % length_cm) then
+       scale = 100.0
+    else
+       scale = 1.0
+    end if
+
+    !! open the files
+    !! if the scan number is 0, put .sp. in the file name.
+    if (scanNumber == 0) then
+       !! file number 1
+       if (output_parameters % circuit_power_vs_z) then
+          write(filename,fmt="(A19, A1, A7)") './outputs/pow_vs_z.', &
+               modelID, '.sp.dat'
+          open(1,file=filename,action='write')
+       end if
+       !! file number 2
+       if (output_parameters % magnitude_vs_z) then
+          write(filename,fmt="(A19, A1, A7)") './outputs/mag_vs_z.', &
+               modelID, '.sp.dat'
+          open(2,file=filename,action='write')
+       end if
+       !! file number 3
+       if (output_parameters % phase_vs_z) then
+          write(filename,fmt="(A21, A1, A7)") './outputs/phase_vs_z.', &
+               modelID, '.sp.dat'
+          open(3,file=filename,action='write')
+       end if
+       !! file number 4
+       if (output_parameters % phase_differences_vs_z) then
+          write(filename,fmt="(A26, A1, A7)") './outputs/phase_diff_vs_z.', &
+               modelID, '.sp.dat'
+          open(4,file=filename,action='write')
+       end if
+
+       !! DO NOT USE FILE NUMBERS 5 or 6 for compatibility with lahey95
+       !! Windows compiler.
+
+       !! file number 7
+       if (output_parameters % hot_phase_velocity_vs_z) then
+          write(filename,fmt="(A23, A1, A7)") './outputs/hot_vel_vs_z.', &
+               modelID, '.sp.dat'
+          open(7,file=filename,action='write')
+       end if
+       !! file number 11
+       if (output_parameters % dc_beam_vel_vs_z) then
+          write(filename,fmt="(A22, A1, A7)") './outputs/dcbeam_vs_z.', &
+               modelID, '.sp.dat'
+          open(11,file=filename,action='write')
+       end if
+    else !! not single pass, but some scan number
+       !! file number 1
+       if (output_parameters % circuit_power_vs_z) then
+          if (scanNumber < 10) then
+             write(filename,fmt="(A19, A1, A1, I1, A4)") &
+                  './outputs/pow_vs_z.', &
+                  modelID, '.', scanNumber, '.dat'
+          else if (scanNumber < 100) then
+             write(filename,fmt="(A19, A1, A1, I2, A4)") &
+                  './outputs/pow_vs_z.', &
+                  modelID, '.', scanNumber, '.dat'
+          end if
+          open(1,file=filename,action='write')
+       end if
+       !! file number 2
+       if (output_parameters % magnitude_vs_z) then
+          if (scanNumber < 10) then
+             write(filename,fmt="(A19, A1, A1, I1, A4)") &
+                  './outputs/mag_vs_z.', modelID, '.', scanNumber, '.dat'
+          else if (scanNumber < 100) then
+             write(filename,fmt="(A19, A1, A1, I2, A4)") &
+                  './outputs/mag_vs_z.', modelID, '.', scanNumber, '.dat'
+          end if
+          open(2,file=filename,action='write')
+       end if
+       !! file number 3
+       if (output_parameters % phase_vs_z) then
+          if (scanNumber < 10) then
+             write(filename,fmt="(A21, A1, A1, I1, A4)") &
+                  './outputs/phase_vs_z.', modelID, '.', scanNumber, '.dat'
+          else if (scanNumber < 100) then
+             write(filename,fmt="(A21, A1, A1, I2, A4)") &
+                  './outputs/phase_vs_z.', modelID, '.', scanNumber, '.dat'
+          end if
+          open(3,file=filename,action='write')
+       end if
+       !! file number 4
+       if (output_parameters % phase_differences_vs_z) then
+          if (scanNumber < 10) then
+             write(filename,fmt="(A26, A1, A1, I1, A4)") &
+                  './outputs/phase_diff_vs_z.', modelID, '.', &
+                  scanNumber, '.dat'
+          else if (scanNumber < 100) then
+             write(filename,fmt="(A26, A1, A1, I2, A4)") &
+                  './outputs/phase_diff_vs_z.', modelID, '.', &
+                  scanNumber, '.dat'
+          end if
+          open(4,file=filename,action='write')
+       end if
+       !! file number 7
+       if (output_parameters % hot_phase_velocity_vs_z) then
+          if (scanNumber < 10) then
+             write(filename,fmt="(A23, A1, A1, I1, A4)") &
+                  './outputs/hot_vel_vs_z.', modelID, '.', &
+                  scanNumber, '.dat'
+          else if (scanNumber < 100) then
+             write(filename,fmt="(A23, A1, A1, I2, A4)") &
+                  './outputs/hot_vel_vs_z.', modelID, '.', &
+                  scanNumber, '.dat'
+          end if
+          open(7,file=filename,action='write')
+       end if
+       !! file number 11
+       if (output_parameters % dc_beam_vel_vs_z) then
+          if (scanNumber < 10) then
+             write(filename,fmt="(A22, A1, A1, I1, A4)") &
+                  './outputs/dcbeam_vs_z.', modelID, '.', &
+                  scanNumber, '.dat'
+          else if (scanNumber < 100) then
+             write(filename,fmt="(A22, A1, A1, I2, A4)") &
+                  './outputs/dcbeam_vs_z.', modelID, '.', &
+                  scanNumber, '.dat'
+          end if
+          open(11,file=filename,action='write')
+       end if
+    end if
+
+    !! write the file headers
+    if (output_parameters % file_headers) then
+       !! file number 1
+       if (output_parameters % circuit_power_vs_z) then
+          if (modelID=='L') then
+             write(1,fmt="(A5)") 'LATTE'
+          else if (modelID=='M') then
+             write(1,fmt="(A4)") 'MUSE'
+          else
+             write(1,fmt="(A6)") 'S-MUSE'
+          end if
+          !! if it is a scan, put the scan number in the header info
+          if (scanNumber /= 0) then
+             write(1,fmt="(A6,I3)") 'Scan #', scanNumber
+          end if
+          write(1,fmt="(A29)") 'circuit power versus distance'
+
+          !! write the column information
+          if (scanNumber == 0) then
+             !! for a single pass
+             write(1, fmt="(A18)") 'column = frequency'
+          else
+             !! for a one parameter scan
+             write(1, fmt="(A22)") 'column = value #, freq'
+          end if
+
+          !!start the column headings
+          write(1, fmt="(A15)", advance='no') 'distance'
+          
+          !! tmpNumPoints is the number of points in the outer loop
+          if (scanNumber == 0) then
+             tmpNumPoints = 1
+          else
+             tmpNumPoints = &
+                  run_parameters % scan_data_array(scanNumber) % num_points 
+          end if
+
+          do i = 1, tmpNumPoints
+             do j = 1, M
+                if (fl(j) >= frequency_parameters % min_ckt_freq &
+                     .and. fl(j) <= frequency_parameters % max_ckt_freq) then
+                   if (scanNumber == 0) then
+                      write(1, fmt="(I15)", advance='no') fl(j)
+                   else
+                      write(1, fmt="(I7, I8)", advance='no') i, fl(j)
+                   end if
+                end if
+             end do
+          end do
+
+          write(1, fmt="(A1)", advance='yes')
+       end if
+       !! file number 2
+       if (output_parameters % magnitude_vs_z) then
+          if (modelID=='L') then
+             write(2,fmt="(A5)") 'LATTE'
+          else if (modelID=='M') then
+             write(2,fmt="(A4)") 'MUSE'
+          else
+             write(2,fmt="(A6)") 'S-MUSE'
+          end if
+          !! if it is a scan, put the scan number in the header info
+          if (scanNumber /= 0) then
+             write(2,fmt="(A6,I3)") 'Scan #', scanNumber
+          end if
+
+          write(2,fmt="(A40, I1)") &
+               'magnitude versus distance for mvz_qty = ', &
+               output_parameters % mvz_qty
+
+          !! write the column information
+          if (scanNumber == 0) then
+             !! for a single pass
+             write(2, fmt="(A18)") 'column = frequency'
+          else
+             !! for a one parameter scan
+             write(2, fmt="(A22)") 'column = value #, freq'
+          end if
+
+          write(2, fmt="(A15)", advance='no') 'distance'
+
+          !! tmpNumPoints is the number of points in the outer loop
+          if (scanNumber == 0) then
+             tmpNumPoints = 1
+          else
+             tmpNumPoints = &
+                  run_parameters % scan_data_array(scanNumber) % num_points 
+          end if
+
+          do i = 1, tmpNumPoints
+             do j = 1 , M
+                if (output_parameters % mvz_qty == 1 &
+                     .or. output_parameters % mvz_qty ==2) then
+                   !! write the circuit frequencies
+                   if (fl(j) >= frequency_parameters % min_ckt_freq .and. &
+                        fl(j) <= frequency_parameters % max_ckt_freq) then
+                      if (scanNumber == 0) then
+                         write(2, fmt="(I15)", advance='no') fl(j)
+                      else
+                         write(2, fmt="(I7, I8)", advance='no') i, fl(j)
+                      end if
+                   end if
+                else
+                   !! write the space charge frequencies
+                   if (fl(j) >= frequency_parameters % min_space_charge_freq &
+                        .and. &
+                        fl(j) <= frequency_parameters % &
+                        max_space_charge_freq) then
+                      if (scanNumber == 0) then
+                         write(2, fmt="(I15)", advance='no') fl(j)
+                      else
+                         write(2, fmt="(I7, I8)", advance='no') i, fl(j)
+                      end if
+                   end if
+                end if
+             end do
+          end do
+          write(2, fmt="(A1)", advance='yes')
+       end if
+       !! file number 3
+       if (output_parameters % phase_vs_z) then
+          if (modelID=='L') then
+             write(3,fmt="(A5)") 'LATTE'
+          else if (modelID=='M') then
+             write(3,fmt="(A4)") 'MUSE'
+          else
+             write(3,fmt="(A6)") 'S-MUSE'
+          end if
+          !! if it is a scan, put the scan number in the header info
+          if (scanNumber /= 0) then
+             write(3,fmt="(A6,I3)") 'Scan #', scanNumber
+          end if
+
+          write(3,fmt="(A36, I1)") 'phase versus distance for pvz_qty = ', &
+               output_parameters % pvz_qty
+
+          !! write the column information
+          if (scanNumber == 0) then
+             !! for a single pass
+             write(3, fmt="(A18)") 'column = frequency'
+          else
+             !! for a one parameter scan
+             write(3, fmt="(A22)") 'column = value #, freq'
+          end if
+
+          write(3, fmt="(A15)", advance='no') 'distance'
+
+          !! tmpNumPoints is the number of points in the outer loop
+          if (scanNumber == 0) then
+             tmpNumPoints = 1
+          else
+             tmpNumPoints = &
+                  run_parameters % scan_data_array(scanNumber) % num_points 
+          end if
+
+          do i = 1, tmpNumPoints
+             do j = 1 , M
+                if (output_parameters % pvz_qty == 1 &
+                     .or. output_parameters % pvz_qty ==2) then
+                   !! write the circuit frequencies
+                   if (fl(j) >= frequency_parameters % min_ckt_freq .and. &
+                        fl(j) <= frequency_parameters % max_ckt_freq) then
+                      if (scanNumber == 0) then
+                         write(3, fmt="(I15)", advance='no') fl(j)
+                      else
+                         write(3, fmt="(I7, I8)", advance='no') i, fl(j)
+                      end if
+                   end if
+                else
+                   !! write the space charge frequencies
+                   if (fl(j) >= frequency_parameters % min_space_charge_freq &
+                        .and. &
+                        fl(j) <= frequency_parameters % &
+                        max_space_charge_freq) then
+                      if (scanNumber == 0) then
+                         write(3, fmt="(I15)", advance='no') fl(j)
+                      else
+                         write(3, fmt="(I7, I8)", advance='no') i, fl(j)
+                      end if
+                   end if
+                end if
+             end do
+          end do
+          write(3, fmt="(A1)", advance='yes')
+       end if
+
+       !! file number 4
+       if (output_parameters % phase_differences_vs_z) then
+          if (modelID=='L') then
+             write(4,fmt="(A5)") 'LATTE'
+          else if (modelID=='M') then
+             write(4,fmt="(A4)") 'MUSE'
+          else
+             write(4,fmt="(A6)") 'S-MUSE'
+          end if
+
+          !! if it is a scan, put the scan number in the header info
+          if (scanNumber /= 0) then
+             write(4,fmt="(A6,I3)") 'Scan #', scanNumber
+          end if
+
+          write(4,fmt="(A37, I1, A16, I1)") &
+               'phase versus distance for pd_qty_1 = ', &
+               output_parameters % pd_qty_1, ' and pd_qty_2 = ', &
+               output_parameters % pd_qty_2
+
+          !! write the column information
+          if (scanNumber == 0) then
+             !! for a single pass
+             write(4, fmt="(A18)") 'column = frequency'
+          else
+             !! for a one parameter scan
+             write(4, fmt="(A22)") 'column = value #, freq'
+          end if
+
+          write(4, fmt="(A15)", advance='no') 'distance'
+
+          !! tmpNumPoints is the number of points in the outer loop
+          if (scanNumber == 0) then
+             tmpNumPoints = 1
+          else
+             tmpNumPoints = &
+                  run_parameters % scan_data_array(scanNumber) % num_points 
+          end if
+
+          do i = 1, tmpNumPoints
+             do j = 1 , M 
+                !! one of the pd_qtys is a circuit parameter, only do ckt_freqs
+                if (output_parameters % pd_qty_1 == 1 &
+                     .or. output_parameters % pd_qty_1 == 2 &
+                     .or. output_parameters % pd_qty_2 == 1 &
+                     .or. output_parameters % pd_qty_2 == 2) then
+                   !! write the circuit frequencies
+                   if (fl(j) >= frequency_parameters % min_ckt_freq .and. &
+                        fl(j) <= frequency_parameters % max_ckt_freq) then
+                      if (scanNumber == 0) then
+                         write(4, fmt="(I15)", advance='no') fl(j)
+                      else
+                         write(4, fmt="(I7, I8)", advance='no') i, fl(j)
+                      end if
+                   end if
+                else
+                   !! write the space charge frequencies
+                   if (fl(j) >= frequency_parameters % min_space_charge_freq &
+                        .and. fl(j) <= frequency_parameters % &
+                        max_space_charge_freq) then
+                      if (scanNumber == 0) then
+                         write(4, fmt="(I15)", advance='no') fl(j)
+                      else
+                         write(4, fmt="(I7,I8)", advance='no') i, fl(j)
+                      end if
+                   end if
+                end if
+             end do
+          end do
+          write(4, fmt="(A1)", advance='yes')
+       end if
+
+       !! file number 7
+       if (output_parameters % hot_phase_velocity_vs_z) then
+          if (modelID=='L') then
+             write(7,fmt="(A5)") 'LATTE'
+          else if (modelID=='M') then
+             write(7,fmt="(A4)") 'MUSE'
+          else
+             write(7,fmt="(A6)") 'S-MUSE'
+          end if
+
+          !! if it is a scan, put the scan number in the header info
+          if (scanNumber /= 0) then
+             write(7,fmt="(A6,I3)") 'Scan #', scanNumber
+          end if
+
+          write(7,fmt="(A34)") 'hot phase velocity versus distance'
+
+          !! write the column information
+          if (scanNumber == 0) then
+             !! for a single pass
+             write(7, fmt="(A18)") 'column = frequency'
+          else
+             !! for a one parameter scan
+             write(7, fmt="(A22)") 'column = value #, freq'
+          end if
+
+          write(7, fmt="(A15)", advance='no') 'distance'
+
+          !! tmpNumPoints is the number of points in the outer loop
+          if (scanNumber == 0) then
+             tmpNumPoints = 1
+          else
+             tmpNumPoints = &
+                  run_parameters % scan_data_array(scanNumber) % num_points 
+          end if
+
+          do i = 1, tmpNumPoints
+             do j = first_ckt_index , last_ckt_index
+                if (scanNumber == 0) then
+                   write(7, fmt="(I15)", advance='no') fl(j)
+                else
+                   write(7, fmt="(I7, I8)", advance='no') i, fl(j)
+                end if
+             end do
+          end do
+          write(7, fmt="(A1)", advance='yes')
+       end if
+
+       !! file number 11
+       if (output_parameters % dc_beam_vel_vs_z) then
+          if (modelID=='L') then
+             write(11,fmt="(A5)") 'LATTE'
+          else if (modelID=='M') then
+             write(11,fmt="(A4)") 'MUSE'
+          else
+             write(11,fmt="(A6)") 'S-MUSE'
+          end if
+          !! if it is a scan, put the scan number in the header info
+          if (scanNumber /= 0) then
+             write(11,fmt="(A6,I3)") 'Scan #', scanNumber
+          end if
+          write(11,fmt="(A32)") 'dc beam velocity versus distance'
+
+          !! write the column information
+          if (scanNumber == 0) then
+             !! for a single pass
+             write(11, fmt="(A20)") 'column = dc velocity'
+          else
+             !! for a one parameter scan
+             write(11, fmt="(A29)") 'column = value #, dc velocity'
+          end if
+
+          !!start the column headings
+          write(11, fmt="(A15)", advance='no') 'distance'
+          
+          !! tmpNumPoints is the number of points in the outer loop
+          if (scanNumber == 0) then
+             tmpNumPoints = 1
+          else
+             tmpNumPoints = &
+                  run_parameters % scan_data_array(scanNumber) % num_points 
+          end if
+
+          do i = 1, tmpNumPoints
+             if (scanNumber == 0) then
+                write(11, fmt="(A15)", advance='no') 'dc velocity'
+             else
+                write(11, fmt="(I7, A8)", advance='no') i, 'dc vel'
+             end if
+          end do
+
+          write(11, fmt="(A1)", advance='yes')
+       end if
+
+    end if !! end if file_headers
+
+
+    !! start writing the data
+
+
+    !! allocate tmpY which is the vector passed to the unnormalization routine
+    allocate(tmpY(n_eqns))
+    allocate(tmpCmplx1(n_eqns))
+    allocate(tmpCmplx2(n_eqns))
+
+    z = 0.0
+
+    !!set a flag if the scan is a dispersion scan, use to recompute dispersion
+    if (scanNumber /= 0) then
+      if (run_parameters % scan_data_array(scanNumber) % scanID == 4) then
+	dispersion_scan_flag = .true.
+      end if
+    else
+      dispersion_scan_flag = .false.
+    end if
+
+    !! tmpNumPoints is the number of points in the outer loop
+    if (scanNumber == 0) then
+       tmpNumPoints = 1
+    else
+       tmpNumPoints = &
+            run_parameters % scan_data_array(scanNumber) % num_points 
+    end if
+
+    !! outer loop. makes one row per axial point
+    do i = 1, output_parameters % num_axial_points
+
+       !! write the z value
+       if (output_parameters % circuit_power_vs_z) then
+          write(1, fmt="(en15.5)", advance='no') z*scale
+       end if
+       if (output_parameters % magnitude_vs_z) then
+          write(2, fmt="(en15.5)", advance='no') z*scale
+       end if
+       if (output_parameters % phase_vs_z) then
+          write(3, fmt="(en15.5)", advance='no') z*scale
+       end if
+       if (output_parameters % phase_differences_vs_z) then
+          write(4, fmt="(en15.5)", advance='no') z*scale
+       end if
+       if (output_parameters % hot_phase_velocity_vs_z) then
+          write(7, fmt="(en15.5)", advance='no') z*scale
+       end if
+       if (output_parameters % dc_beam_vel_vs_z) then
+          write(11, fmt="(en15.5)", advance='no') z*scale
+       end if
+
+       !!second loop. loops on first index of plot_cube, or num_point of scan
+       do ii = 1, tmpNumPoints 
+	  !! if a dispersion scan, recompute the dispersion
+	  if (dispersion_scan_flag) then
+	    call recompute_dispersion(scanNumber, ii, origDisp)
+	  end if
+
+          !! copy plot_cube(ii,i,:) into tmpY
+          tmpY = plot_cube(ii,i,:)
+
+          !! use tmpCmplx1,2 for spatial derivatives. center differencing.
+          if (i==1) then
+             h = scale*dz
+             tmpCmplx1 = plot_cube(ii,i,:)
+             tmpCmplx2 = plot_cube(ii,i+1,:)
+          else if (i == output_parameters % num_axial_points) then
+             h = scale*dz
+             tmpCmplx1 = plot_cube(ii,i-1,:)
+             tmpCmplx2 = plot_cube(ii,i,:)
+          else
+             h = 2.0*scale*dz
+             tmpCmplx1 = plot_cube(ii,i-1,:)
+             tmpCmplx2 = plot_cube(ii,i+1,:)
+          end if
+          
+          !! unnormalize the vector
+          if (modelID=='L') then
+             call unnorm_latte_vector(tmpY)
+          else
+             call unnorm_muse_vector(tmpY)
+          end if
+          
+          !! compute and write the data for file 1
+          if (output_parameters % circuit_power_vs_z) then
+             !!loop over frequencies
+             do j = first_ckt_index, last_ckt_index
+                if (modelID=='L') then
+                   if (.not. run_parameters % svea) then
+                      !! the "real" power, I*V
+                      tmpPower = - (tmpY(j)*conjg(tmpY(j+M)) &
+                           + conjg(tmpY(j))*tmpY(j+M))
+                   else
+                      !! the "other" power, 2V^2/K
+                      tmpPower =  2.0*tmpY(j)*conjg(tmpY(j))/K(z,j)
+                   end if
+                else !! MUSE, S-MUSE
+                   tmpPower = - (tmpY(j)*conjg(tmpY(j+M+1)) &
+                        + conjg(tmpY(j))*tmpY(j+M+1))
+                end if
+                
+                !convert tmpPower to dBm
+                if (units_structure % output_power_dBm) then
+                   if (tmpPower <= 0.0) then
+                      tmpPower = -100.0
+                   else
+                      tmpPower = 10.0 * log10(tmpPower/0.001)
+                   end if
+                end if
+                write(1, fmt="(en15.5)", advance='no') tmpPower
+             end do
+          end if
+
+          !! compute and write the data for file 2
+          if (output_parameters % magnitude_vs_z) then
+             if (output_parameters % mvz_qty == 4 &
+                  .and. modelID=='L') then
+                print*, &
+              'Magnitude information for velocity is not implemented in LATTE'
+             end if
+             if (output_parameters % mvz_qty == 1 &
+                  .or. output_parameters % mvz_qty == 2) then
+                !!loop over frequencies
+                do j = first_ckt_index, last_ckt_index
+                   if (modelID=='L') then 
+                      tmpMag = abs(tmpY(j+(output_parameters % mvz_qty-1)*M))
+                   else !! MUSE, S-MUSE
+                      tmpMag = &
+                           abs(tmpY(j+(output_parameters % mvz_qty-1)*(M+1)))
+                   end if
+                   
+                   !if output_power_dBm then give log 
+                   if (units_structure % output_power_dBm) then
+                      if (tmpMag /= 0.0) then
+                         tmpMag = log10(tmpMag)
+                      else
+                         tmpMag = log10(1.0e-15)
+                      end if
+                   end if
+                   write(2, fmt="(en15.5)", advance='no') tmpMag
+                end do
+             else
+                !!loop over space charge frequencies
+                do j = first_spch_index, last_spch_index
+                   if (modelID=='L') then
+                      if (output_parameters % mvz_qty == 3) then
+                         !! space charge field
+                         tmpMag = &
+                              abs(tmpY(j+(output_parameters % mvz_qty-1)*M))
+                      else if (output_parameters % mvz_qty == 4) then
+                         !! velocity
+                         tmpMag = 0.0
+                      else if (output_parameters % mvz_qty == 5) then
+                         !! density
+                         !! compute rhol
+                         rhol = (0.0,0.0)
+                         do l = 3*M+1, 3*M+N_disks
+                            !! unnormalized, no w0
+                            rhol = &
+                                 rhol + exp(-smo*fl(j)*tmpY(l+N_disks))/tmpY(l)
+                         end do
+                         rhol = derived_qtys % rho0 * derived_qtys % u0 &
+                              * 1.0/real(N_disks) * rhol
+                         tmpMag = abs(rhol)
+                      else if (output_parameters % mvz_qty == 6) then
+                         !! beam current
+                         !! compute ibeaml
+                         ibeaml = (0.0,0.0)
+                         do l = 3*M+1, 3*M+N_disks
+                            !! unnormalized, no w0
+                            ibeaml = &
+                                 ibeaml + exp(-smo*fl(j)*tmpY(l+N_disks))
+                         end do
+                         ibeaml = derived_qtys % rho0 * derived_qtys % u0 &
+                              * derived_qtys % beam_area &
+                              * 1.0/real(N_disks) * ibeaml
+                         tmpMag = abs(ibeaml)
+                      end if
+                   else !! MUSE, S-MUSE
+                      if (output_parameters % mvz_qty <= 5) then
+                         !! MUSE state variables
+                         tmpMag = &
+                              abs(tmpY(j+(output_parameters % mvz_qty-1) &
+                              *(M+1)))
+                      else
+                         !! compute beam current
+                         ibeaml = (0.0,0.0)
+                         !! j = frequency index, loop on other frequencies
+                         do l = -last_spch_index, last_spch_index
+                            !!f_m /= 0 and f_n /= 0
+                            if (l /= j .and. l /= 0 .and. &
+                                 abs(l) >= first_spch_index) then
+                               kk = find_freq(fl(j)-fl(l))
+                               if (abs(kk) >= first_spch_index) then
+                                  if (l < 0 .and. kk > 0) then
+                                     !!f_m < 0 and f_n > 0
+                                     ibeaml = ibeaml &
+                                          + conjg(tmpY(abs(l)+4*(M+1))) &
+                                          *tmpY(kk+3*(M+1))
+                                  else if (l > 0 .and. kk < 0) then
+                                     !!f_m > 0 and f_n < 0
+                                     ibeaml = ibeaml &
+                                          + tmpY(l+4*(M+1)) &
+                                          *conjg(tmpY(abs(kk)+3*(M+1)))
+                                  else if (l > 0 .and. kk > 0) then
+                                     !!f_m > 0, f_n > 0
+                                     ibeaml = ibeaml + tmpY(l+4*(M+1)) &
+                                          *tmpY(kk+3*(M+1))
+                                  end if
+                               end if
+                            else if (l == j .and. &
+                                 l >= first_spch_index) then
+                               !!f_m = f_\ell /= 0 (since i /= M+1), f_n = 0
+                               ibeaml = ibeaml + tmpY(j+4*(M+1))*tmpY(4*(M+1))
+                            else if (l == 0) then
+                               !! f_m = 0, f_n = f_\ell /= 0 (since i /= M+1)
+                               ibeaml = ibeaml + tmpY(5*(M+1))*tmpY(j+3*(M+1))
+                            end if
+                         end do
+                         ibeaml = ibeaml * derived_qtys % beam_area
+                         tmpMag = abs(ibeaml)
+                      end if
+                   end if
+                   
+                   !if output_power_dBm then give log 
+                   if (units_structure % output_power_dBm) then
+                      if (tmpMag /= 0.0) then
+                         tmpMag = log10(tmpMag)
+                      else
+                         tmpMag = log10(1.0e-15)
+                      end if
+                   end if
+                   write(2, fmt="(en15.5)", advance='no') tmpMag
+                end do
+             end if
+          end if
+
+          !! compute and write the data for file 3
+          if (output_parameters % phase_vs_z) then
+             if (output_parameters % pvz_qty == 4 .and. modelID=='L') then
+                print*, &
+                   'Phase information for velocity is not implemented in LATTE'
+             end if
+             
+             !! circuit voltage or circuit current
+             if (output_parameters % pvz_qty == 1 .or. &
+                  output_parameters % pvz_qty == 2) then
+                !!loop over frequencies
+                do j = first_ckt_index, last_ckt_index
+                   !! phase_factor makes complex qtys referred to cold circuit
+                   !! wave rather than stream wave
+                   phase_factor = &
+                        exp(smo*fl(j)*frequency_parameters % base_frequency &
+                        * 2.0 * pi * (-1.0/vph(z,j) + 1.0/derived_qtys % u0)*z)
+                   
+                   if (modelID=='L') then
+                      if (.not. run_parameters % svea) then
+
+	! don't think I should be modifying tmpY directly!
+			print*, 'FIX ME: dont modify tmpY directly!'
+
+                         tmpY(j+(output_parameters % pvz_qty-1)*M) = &
+                              tmpY(j+(output_parameters % pvz_qty-1)*M) &
+                              * phase_factor
+                      end if
+                      tmpPhase = atan2(aimag(tmpY(j+(output_parameters % &
+                           pvz_qty-1)*M)), &
+                           real(tmpY(j+(output_parameters % pvz_qty-1)*M)))
+                   else !! MUSE, S-MUSE
+                      if (.not. run_parameters % svea) then
+                         tmpY(j+(output_parameters % pvz_qty-1)*M) = &
+                              tmpY(j+(output_parameters % pvz_qty-1)*M) * &
+                              phase_factor
+                      end if
+                      tmpPhase = &
+                           atan2(aimag(tmpY(j+(output_parameters % pvz_qty-1) &
+                           *(M+1))), &
+                           real(tmpY(j+(output_parameters % pvz_qty-1)*(M+1))))
+                   end if
+                   
+                   !convert radians to degrees
+                   if (units_structure % phase_degrees) then
+                      tmpPhase = 180.0 * tmpPhase / pi
+                   end if
+                   write(3, fmt="(en15.5)", advance='no') tmpPhase
+                end do
+             else
+                !!loop over frequencies
+                do j = first_spch_index, last_spch_index
+                   !! phase_factor makes complex qtys referred to cold circuit
+                   !! wave rather than stream wave
+                   if (j >= first_ckt_index .and. j <= last_ckt_index) then
+                      phase_factor = &
+                           exp(smo*fl(j)*frequency_parameters % &
+                           base_frequency *2.0*pi &
+                           * (-1.0/vph(z,j) + 1.0/derived_qtys % u0)*z)
+                   else
+                      phase_factor = 1.0
+                   end if
+
+                   if (modelID=='L') then
+                      if (output_parameters % pvz_qty == 3) then
+                         tmpY(j+(output_parameters % pvz_qty-1)*M) = &
+                              tmpY(j+(output_parameters % pvz_qty-1)*M) &
+                              * phase_factor
+                         tmpPhase = &
+                              atan2(aimag(tmpY(j+(output_parameters % &
+                              pvz_qty-1)*M)), &
+                              real(tmpY(j+(output_parameters % pvz_qty-1)*M)))
+                      else if (output_parameters % pvz_qty == 4) then
+                         tmpPhase = 0.0
+                      else if (output_parameters % pvz_qty == 5) then
+                         !! compute rhol
+                         rhol = (0.0,0.0)
+                         do l = 3*M+1, 3*M+N_disks
+                            !! unnormalized, no w0
+                            rhol = &
+                                 rhol + exp(-smo*fl(j)*tmpY(l+N_disks))/tmpY(l)
+                         end do
+                         rhol = derived_qtys % rho0 * derived_qtys % u0 &
+                              * 1.0/real(N_disks) * rhol
+                         rhol = rhol * phase_factor
+                         tmpPhase = atan2(aimag(rhol),real(rhol))
+                      else if (output_parameters % pvz_qty == 6) then
+                         !! beam current
+                         !! compute ibeaml
+                         ibeaml = (0.0,0.0)
+                         do l = 3*M+1, 3*M+N_disks
+                            !! unnormalized, no w0
+                            ibeaml = &
+                                 ibeaml + exp(-smo*fl(j)*tmpY(l+N_disks))
+                         end do
+                         ibeaml = derived_qtys % rho0 * derived_qtys % u0 &
+                              * derived_qtys % beam_area &
+                              * 1.0/real(N_disks) * ibeaml
+                         ibeaml = ibeaml * phase_factor
+                         tmpPhase = atan2(aimag(ibeaml),real(ibeaml))
+                      end if
+                   else !! MUSE, S-MUSE
+                      if (output_parameters % pvz_qty <= 5) then
+                         !! MUSE state variables
+                         !tmpY(j+(output_parameters % pvz_qty-1)*(M+1)) = &
+                         !tmpY(j+(output_parameters % pvz_qty-1)*(M+1)) &
+                         !* phase_factor
+                         tmpPhase = &
+                              atan2(aimag(tmpY(j+(output_parameters &
+                              % pvz_qty-1)*(M+1))*phase_factor), &
+                              real(tmpY(j+(output_parameters &
+                              % pvz_qty-1)*(M+1))*phase_factor))
+                      else
+                         !! compute beam current
+                         ibeaml = (0.0,0.0)
+                         !! j = frequency index, loop on other frequencies
+                         do l = -last_spch_index, last_spch_index
+                            !!f_m /= 0 and f_n /= 0
+                            if (l /= j .and. l /= 0 .and. &
+                                 abs(l) >= first_spch_index) then
+                               kk = find_freq(fl(j)-fl(l))
+                               if (abs(kk) >= first_spch_index) then
+                                  if (l < 0 .and. kk > 0) then
+                                     !!f_m < 0 and f_n > 0
+                                     ibeaml = ibeaml &
+                                          + conjg(tmpY(abs(l)+4*(M+1))) &
+                                          *tmpY(kk+3*(M+1))
+                                  else if (l > 0 .and. kk < 0) then
+                                     !!f_m > 0 and f_n < 0
+                                     ibeaml = ibeaml &
+                                          + tmpY(l+4*(M+1)) &
+                                          *conjg(tmpY(abs(kk)+3*(M+1)))
+                                  else if (l > 0 .and. kk > 0) then
+                                     !!f_m > 0, f_n > 0
+                                     ibeaml = ibeaml + tmpY(l+4*(M+1)) &
+                                          *tmpY(kk+3*(M+1))
+                                  end if
+                               end if
+                            else if (l == j .and. &
+                                 l >= first_spch_index) then
+                               !!f_m = f_\ell /= 0 (since i /= M+1), f_n = 0
+                               ibeaml = ibeaml + tmpY(j+4*(M+1))*tmpY(4*(M+1))
+                            else if (l == 0) then
+                               !! f_m = 0, f_n = f_\ell /= 0 (since i /= M+1)
+                               ibeaml = ibeaml + tmpY(5*(M+1))*tmpY(j+3*(M+1))
+                            end if
+                         end do
+                         ibeaml = ibeaml * derived_qtys % beam_area
+                         ibeaml = ibeaml * phase_factor
+                         tmpPhase = atan2(aimag(ibeaml),real(ibeaml))
+                      end if
+                   end if
+                   
+                   !convert radians to degrees
+                   if (units_structure % phase_degrees) then
+                      tmpPhase = 180.0 * tmpPhase / pi
+                   end if
+                   write(3, fmt="(en15.5)", advance='no') tmpPhase
+                end do
+             end if
+          end if
+
+          !! compute and write the data for file 4
+          if (output_parameters % phase_differences_vs_z) then
+             pd1 = output_parameters % pd_qty_1
+             pd2 = output_parameters % pd_qty_2
+             if ((pd1 == 4 .or. pd2 == 4) .and. modelID=='L') then
+                print*, &
+                   'Phase information for velocity is not implemented in LATTE'
+             end if
+             if (pd1 == 1 .or. pd1 == 2 .or. pd2 == 1 .or. pd2 == 2) then
+                !!loop over frequencies
+                do j = first_ckt_index, last_ckt_index
+                   phase_factor = &
+                        exp(smo*fl(j)*frequency_parameters % base_frequency &
+                        * 2.0 * pi * (-1.0/vph(z,j) + 1.0/derived_qtys % u0)*z)
+
+                   if (modelID=='L') then
+                      !! one of the qtys is density so compute rhol
+                      if (pd1 == 5 .or. pd2 == 5) then
+                         !! compute rhol
+                         rhol = (0.0,0.0)
+                         do l = 3*M+1, 3*M+N_disks
+                            !! unnormalized, no w0
+                            rhol = &
+                                 rhol + exp(-smo*fl(j)*tmpY(l+N_disks))/tmpY(l)
+                         end do
+                         rhol = derived_qtys % rho0 * derived_qtys % u0 &
+                              * 1.0/real(N_disks) * rhol
+                         rhol = rhol * phase_factor
+                      end if
+                      !! one of the qtys is current so compute ibeaml
+                      if (pd1 == 6 .or. pd2 == 6) then
+                         !! beam current
+                         !! compute ibeaml
+                         ibeaml = (0.0,0.0)
+                         do l = 3*M+1, 3*M+N_disks
+                            !! unnormalized, no w0
+                            ibeaml = &
+                                 ibeaml + exp(-smo*fl(j)*tmpY(l+N_disks))
+                         end do
+                         ibeaml = derived_qtys % rho0 * derived_qtys % u0 &
+                              * derived_qtys % beam_area &
+                              * 1.0/real(N_disks) * ibeaml
+                         ibeaml = ibeaml * phase_factor
+                      end if
+                      !! set tmpQty1 for LATTE
+                      if (pd1 == 1 .or. pd1 == 2 .or. pd1 == 3) then
+                         if (.not. run_parameters % svea .and. pd2 /= 3) then
+                            tmpQty1 = tmpY(j+(pd1-1)*M) * phase_factor
+                         else
+                            tmpQty1 = tmpY(j+(pd1-1)*M)
+                         end if
+                      else if (pd1 == 4) then
+                         tmpQty1 = (0.0,0.0)
+                      else if (pd1 == 5) then
+                         tmpQty1 = rhol
+                      else if (pd1 == 6) then
+                         tmpQty1 = ibeaml
+                      end if
+                      !! set tmpQty2 for LATTE
+                      if (pd2 == 1 .or. pd2 == 2 .or. pd2 == 3) then
+                         if (.not. run_parameters % svea .and. pd2 /= 3) then
+                            tmpQty2 = tmpY(j+(pd2-1)*M) * phase_factor
+                         else
+                            tmpQty2 = tmpY(j+(pd2-1)*M)
+                         end if
+                      else if (pd2 == 4) then
+                         tmpQty2 = (1.0,1.0)
+                      else if (pd2 == 5) then
+                         tmpQty2 = rhol
+                      else if (pd2 == 6) then
+                         tmpQty2 = ibeaml
+                      end if
+                   else !! MUSE, S-MUSE
+                      !! if one of the qtys is ibeam, compute it.
+                      if (pd1 == 6 .or. pd2 == 6) then
+                         !! compute beam current
+                         ibeaml = (0.0,0.0)
+                         !! j = frequency index, loop on other frequencies
+                         do l = -last_spch_index, last_spch_index
+                            !!f_m /= 0 and f_n /= 0
+                            if (l /= j .and. l /= 0 .and. &
+                                 abs(l) >= first_spch_index) then
+                               kk = find_freq(fl(j)-fl(l))
+                               if (abs(kk) >= first_spch_index) then
+                                  if (l < 0 .and. kk > 0) then
+                                     !!f_m < 0 and f_n > 0
+                                     ibeaml = ibeaml &
+                                          + conjg(tmpY(abs(l)+4*(M+1))) &
+                                          *tmpY(kk+3*(M+1))
+                                  else if (l > 0 .and. kk < 0) then
+                                     !!f_m > 0 and f_n < 0
+                                     ibeaml = ibeaml &
+                                          + tmpY(l+4*(M+1)) &
+                                          *conjg(tmpY(abs(kk)+3*(M+1)))
+                                  else if (l > 0 .and. kk > 0) then
+                                     !!f_m > 0, f_n > 0
+                                     ibeaml = ibeaml + tmpY(l+4*(M+1)) &
+                                          *tmpY(kk+3*(M+1))
+                                  end if
+                               end if
+                            else if (l == j .and. &
+                                 l >= first_spch_index) then
+                               !!f_m = f_\ell /= 0 (since i /= M+1), f_n = 0
+                               ibeaml = ibeaml + tmpY(j+4*(M+1))*tmpY(4*(M+1))
+                            else if (l == 0) then
+                               !! f_m = 0, f_n = f_\ell /= 0 (since i /= M+1)
+                               ibeaml = ibeaml + tmpY(5*(M+1))*tmpY(j+3*(M+1))
+                            end if
+                         end do
+                         ibeaml = ibeaml * derived_qtys % beam_area
+                         ibeaml = ibeaml * phase_factor
+                      end if
+                      !! set tmpQty1
+                      if ((pd1 == 1 .or. pd1 == 2) &
+                           .and. run_parameters % svea ) then
+                         tmpQty1 = tmpY(j+(pd1-1)*(M+1))
+                      else if (pd1 <= 5) then
+                         tmpQty1 = tmpY(j+(pd1-1)*(M+1)) * phase_factor
+                      else
+                         tmpQty1 = ibeaml
+                      end if
+                      !! set tmpQty2
+                      if ((pd2 == 1 .or. pd2 == 2) &
+                           .and. run_parameters % svea ) then
+                         tmpQty2 = tmpY(j+(pd2-1)*(M+1))
+                      else if (pd2 <= 5) then
+                         tmpQty2 = tmpY(j+(pd2-1)*(M+1)) * phase_factor
+                      else
+                         tmpQty2 = ibeaml
+                      end if
+                   end if
+                   
+                   !! make sure no divide by 0
+                   if (tmpQty2 == (0.0,0.0)) then
+                      tmpQty2 = (1.0,1.0)
+                   end if
+                   
+                   tmpQty1 = tmpQty1/tmpQty2
+                   tmpPhase = atan2(aimag(tmpQty1),real(tmpQty1))
+                   
+                   !convert radians to degrees
+                   if (units_structure % phase_degrees) then
+                      tmpPhase = 180.0 * tmpPhase / pi
+                   end if
+                   write(4, fmt="(en15.5)", advance='no') tmpPhase
+                   
+                end do
+             else !! diff between space charge field and beam charge density
+                !!loop over frequencies
+                do j = first_spch_index, last_spch_index
+                   if (modelID=='L') then
+                      !! if one of the qtys is rho, compute it
+                      if (pd1 == 5 .or. pd2 == 5) then
+                         !! compute rhol
+                         rhol = (0.0,0.0)
+                         do l = 3*M+1, 3*M+N_disks
+                            !! unnormalized, no w0
+                            rhol = &
+                                 rhol + exp(-smo*fl(j)*tmpY(l+N_disks))/tmpY(l)
+                         end do
+                         rhol = derived_qtys % rho0 * derived_qtys % u0 &
+                              * 1.0/real(N_disks) * rhol
+                      end if
+                      !! if one of the qtys is ibeam, compute it
+                      if (pd1 == 6 .or. pd2 == 6) then
+                         !! beam current
+                         !! compute ibeaml
+                         ibeaml = (0.0,0.0)
+                         do l = 3*M+1, 3*M+N_disks
+                            !! unnormalized, no w0
+                            ibeaml = &
+                                 ibeaml + exp(-smo*fl(j)*tmpY(l+N_disks))
+                         end do
+                         ibeaml = derived_qtys % rho0 * derived_qtys % u0 &
+                              * derived_qtys % beam_area &
+                              * 1.0/real(N_disks) * ibeaml
+                      end if
+                      !! set tmpQty1 for LATTE
+                      if (pd1 == 3) then
+                         tmpQty1 = tmpY(j+(pd1-1)*M)
+                      else if (pd1 == 4) then
+                         tmpQty1 = (0.0,0.0)
+                      else if (pd1 == 5) then
+                         tmpQty1 = rhol
+                      else if (pd1 == 6) then
+                         tmpQty1 = ibeaml
+                      end if
+                      !! set tmpQty2 for LATTE
+                      if (pd2 == 3) then
+                         tmpQty2 = tmpY(j+(pd2-1)*M)
+                      else if (pd2 == 4) then
+                         tmpQty2 = (0.0,0.0)
+                      else if (pd2 == 5) then
+                         tmpQty2 = rhol
+                      else if (pd2 == 6) then
+                         tmpQty2 = ibeaml
+                      end if
+                   else !! MUSE, S-MUSE
+                      !! if one of the qtys is ibeam, compute it.
+                      if (pd1 == 6 .or. pd2 == 6) then
+                         !! compute beam current
+                         ibeaml = (0.0,0.0)
+                         !! j = frequency index, loop on other frequencies
+                         do l = -last_spch_index, last_spch_index
+                            !!f_m /= 0 and f_n /= 0
+                            if (l /= j .and. l /= 0 .and. &
+                                 abs(l) >= first_spch_index) then
+                               kk = find_freq(fl(j)-fl(l))
+                               if (abs(kk) >= first_spch_index) then
+                                  if (l < 0 .and. kk > 0) then
+                                     !!f_m < 0 and f_n > 0
+                                     ibeaml = ibeaml &
+                                          + conjg(tmpY(abs(l)+4*(M+1))) &
+                                          *tmpY(kk+3*(M+1))
+                                  else if (l > 0 .and. kk < 0) then
+                                     !!f_m > 0 and f_n < 0
+                                     ibeaml = ibeaml &
+                                          + tmpY(l+4*(M+1)) &
+                                          *conjg(tmpY(abs(kk)+3*(M+1)))
+                                  else if (l > 0 .and. kk > 0) then
+                                     !!f_m > 0, f_n > 0
+                                     ibeaml = ibeaml + tmpY(l+4*(M+1)) &
+                                          *tmpY(kk+3*(M+1))
+                                  end if
+                               end if
+                            else if (l == j .and. &
+                                 l >= first_spch_index) then
+                               !!f_m = f_\ell /= 0 (since i /= M+1), f_n = 0
+                               ibeaml = ibeaml + tmpY(j+4*(M+1))*tmpY(4*(M+1))
+                            else if (l == 0) then
+                               !! f_m = 0, f_n = f_\ell /= 0 (since i /= M+1)
+                               ibeaml = ibeaml + tmpY(5*(M+1))*tmpY(j+3*(M+1))
+                            end if
+                         end do
+                         ibeaml = ibeaml * derived_qtys % beam_area
+
+                      end if
+                      if (pd1 <= 5) then
+                         tmpQty1 = tmpY(j+(pd1-1)*(M+1))
+                      else
+                         tmpQty1 = ibeaml
+                      end if
+                      if (pd2 <= 5) then
+                         tmpQty2 = tmpY(j+(pd2-1)*(M+1))
+                      else
+                         tmpQty2 = ibeaml
+                      end if
+                   end if
+                   
+                   !! make sure no divide by 0
+                   if (tmpQty2 == (0.0,0.0)) then
+                      tmpQty2 = (1.0,1.0)
+                   end if
+                   
+                   tmpQty1 = tmpQty1/tmpQty2
+                   tmpPhase = atan2(aimag(tmpQty1),real(tmpQty1))
+                   
+                   !convert radians to degrees
+                   if (units_structure % phase_degrees) then
+                      tmpPhase = 180.0 * tmpPhase / pi
+                   end if
+                   !! write the phase difference
+                   write(4, fmt="(en15.5)", advance='no') tmpPhase
+                end do
+             end if
+          end if
+          !! compute and write the data for file 7
+          if (output_parameters % hot_phase_velocity_vs_z) then
+             do j = first_ckt_index, last_ckt_index
+                !! first compute the derivative
+                if (tmpCmplx1(j) == (0.0,0.0)) then
+                   tmpCmplx1(j) = (1.0,1.0)
+                end if
+                tmpCmplx2(j) = tmpCmplx2(j)/tmpCmplx1(j)
+                tmpdthetadz = atan2(aimag(tmpCmplx2(j)),real(tmpCmplx2(j)))/h
+
+                if (.not. run_parameters % svea) then
+                   !! phase is relative to beta_e
+                   tmpvhot = &
+                        fl(j)*2.0*pi*frequency_parameters % base_frequency &
+                        /(fl(j)*2.0*pi*frequency_parameters % base_frequency &
+                        / (derived_qtys % u0 * scale)+ tmpdthetadz)
+                else
+                   !! phase is relative to beta_c
+                   tmpvhot = &
+                        fl(j)*2.0*pi*frequency_parameters % base_frequency &
+                        /(fl(j)*2.0*pi*frequency_parameters % base_frequency &
+                        / (vph(z,j) * scale)+ tmpdthetadz)
+                end if
+                !! if vph/c entered, give it back
+                !if (dispersion_parameters % vph_over_c) then
+                !tmpvhot = tmpvhot / (c * scale)
+                !end if
+                write(7, fmt="(en15.5)", advance='no') tmpvhot
+             end do
+          end if
+
+          !! compute and write the data for file 11
+          if (output_parameters % dc_beam_vel_vs_z) then
+             if (modelID=='L') then 
+                !! first compute average
+                !print*, 'i=', i, 'of', output_parameters % num_axial_points
+                tmpdcvel = 0.0
+                do j = 1, N_disks
+                   tmptmpdcvel = 0.0
+                   !! first do the l == 0 contribution
+                   do kk = 1, N_disks
+                      tmptmpdcvel = tmptmpdcvel &
+                           + 1.0/real(tmpY(3*M+kk))
+                   end do
+                   !! then do the l /= 0 contributions
+                   do l = first_spch_index, last_spch_index
+                      do kk = 1, N_disks
+                         tmptmpdcvel = tmptmpdcvel &
+                              + 2.0*cos(fl(l)*(real(tmpY(3*M+N_disks+j)) &
+                              - real(tmpY(3*M+N_disks+kk))))/real(tmpY(3*M+kk))
+                      end do
+                   end do
+                   tmpdcvel = tmpdcvel + 1.0/tmptmpdcvel
+                end do
+
+                !! subtract average from each velocity, add u0 back on,
+                !! then recompute average, do we get nearly u0?
+                allocate(tmpmodY(n_eqns))
+                !! subtract off the variable dc component, add the nonvariable
+                do j = 1, 2*N_disks
+                   tmpmodY(3*M+j) = tmpY(3*M+j) - tmpdcvel + derived_qtys % u0
+                end do
+                
+                !! redo the averaging
+                tmpmoddcvel = 0.0
+                do j = 1, N_disks
+                   tmptmpmoddcvel = 0.0
+                   !! first do the l == 0 contribution
+                   do kk = 1, N_disks
+                      tmptmpmoddcvel = tmptmpmoddcvel &
+                           + 1.0/real(tmpmodY(3*M+kk))
+                   end do
+                   !! then do the l /= 0 contributions
+                   do l = first_spch_index, last_spch_index
+                      do kk = 1, N_disks
+                         tmptmpmoddcvel = tmptmpmoddcvel &
+                              + 2.0*cos(fl(l)*(real(tmpmodY(3*M+N_disks+j)) &
+                              - real(tmpmodY(3*M+N_disks+kk)))) &
+                              /real(tmpmodY(3*M+kk))
+                      end do
+                   end do
+                   tmpmoddcvel = tmpmoddcvel + 1.0/tmptmpmoddcvel
+                end do
+                deallocate(tmpmodY)
+             else !! MUSE, S-MUSE
+                tmpdcvel = tmpY(4*(M+1))
+                tmpmoddcvel = tmpY(4*(M+1)) - derived_qtys % u0
+             end if
+
+             if (units_structure % length_cm) then
+                tmpdcvel = tmpdcvel * 100.0 !! change from m/s to cm/s
+                tmpmoddcvel = tmpmoddcvel * 100.0 !! change from m/s to cm/s
+             end if
+
+             !! if vph/c entered, give it back
+             !if (dispersion_parameters % vph_over_c) then
+             !tmpdcvel = tmpdcvel / (c * scale)
+             !tmpmoddcvel = tmpmoddcvel / (c * scale)
+             !end if
+
+             write(11, fmt="(en20.8, en20.8)", advance='no') tmpdcvel, &
+                  tmpmoddcvel
+          end if
+
+	  !! can only change dispersion 1x and have to reset it, otherwise get
+          !! wrong results
+	  if (dispersion_scan_flag) then
+             call reset_dispersion(scanNumber,origDisp)
+          end if
+
+       end do !!end ii loop
+       z = z + dz
+
+       if (output_parameters % circuit_power_vs_z) then
+          write(1, fmt="(A)")
+       end if
+       if (output_parameters % magnitude_vs_z) then
+          write(2, fmt="(A)")
+       end if
+       if (output_parameters % phase_vs_z) then
+          write(3, fmt="(A)")
+       end if
+       if (output_parameters % phase_differences_vs_z) then
+          write(4, fmt="(A)")
+       end if
+       if (output_parameters % hot_phase_velocity_vs_z) then
+          write(7, fmt="(A)")
+       end if
+       if (output_parameters % dc_beam_vel_vs_z) then
+          write(11, fmt="(A)")
+       end if
+
+    end do
+
+    !! close the files
+    close(1)
+    close(2)
+    close(3)
+    close(4)
+    close(7)
+    close(11)
+    
+    !! release tmpY
+    deallocate(tmpY)
+    deallocate(tmpCmplx1)
+    deallocate(tmpCmplx2)
+  end subroutine vs_z_plots
+
+  subroutine disk_orbits(plot_cube)
+    complex(dp), dimension(:,:,:), intent(in) :: plot_cube
+
+    character(len=40) :: filename
+    integer :: i, j
+    real(dp) :: z, dz, scale
+    complex(dp), dimension(:), allocatable :: tmpY
+
+    if (run_two) then
+       print*, '  generating orbits_vs_z.dat file'
+    end if
+
+    !! create the file
+    write(filename,fmt="(A25)") './outputs/orbits_vs_z.dat'
+    open(1,file=filename,action='write')
+
+    !! set up the z step information
+    dz = circuit_parameters % circuit_length &
+         / (output_parameters % num_axial_points - 1)
+
+    !! multiply scale by z for length in output file
+    if (units_structure % length_cm) then
+       scale = 100.0
+    else
+       scale = 1.0
+    end if
+
+    !! allocate tmpY which is the vector passed to the unnormalization routine
+    allocate(tmpY(n_eqns))
+
+    z = 0.0
+
+    !! outer loop. makes one row per axial point
+    do i = 1, output_parameters % num_axial_points
+       !! copy plot_cube(ii,i,:) into tmpY
+       tmpY = plot_cube(1,i,:)
+       call unnorm_latte_vector(tmpY)
+
+       write(1, fmt="(en15.5)", advance='no') z*scale
+       do j = 1, N_disks
+          write(1, fmt="(en15.5)", advance='no') real(tmpY(3*M+N_disks+j))
+       end do
+       write(1, fmt="(A1)")
+       z = z+dz
+    end do
+
+    close(1)
+
+  end subroutine disk_orbits
+
+  subroutine phase_space(plot_cube)
+    complex(dp), dimension(:,:,:), intent(in) :: plot_cube
+
+    character(len=28) :: filename
+    logical :: part_plotted
+    integer :: i, j, kk
+    real(dp) :: z, dz, omega0, betae, dPsi, dv, fn, z_part, v_part
+    complex(dp), dimension(:), allocatable :: tmpPsi, tmpV
+
+    if (run_two) then
+       print*, '  generating phase_space.dat'
+    end if
+
+    !! tmpY takes a row of plot_cube rather than a column
+    allocate(tmpPsi(output_parameters % num_axial_points))
+    allocate(tmpV(output_parameters % num_axial_points))
+
+    omega0 = 2.0*pi*frequency_parameters % base_frequency
+    betae = omega0/derived_qtys % u0
+    dz = circuit_parameters % circuit_length &
+         / (output_parameters % num_axial_points - 1)
+
+    !! create the file
+    write(filename,fmt="(A25)") './outputs/phase_space.dat'
+    open(1,file=filename,action='write')
+
+    !! loop on particles
+    do j = 1, N_disks
+       !! take the next vector
+       tmpV = plot_cube(1,:,3*M+j)
+       tmpPsi = plot_cube(1,:,3*M+N_disks+j)
+       !! unnormalize the row
+       do kk = 1, output_parameters % num_axial_points
+          tmpV(kk) = tmpV(kk) * derived_qtys % u0
+          tmpPsi(kk) = tmpPsi(kk)*w0
+       end do
+
+       !! compute fn at z=0. if < 0 then disk starts out below the
+       !! \psi = \beta z - \omega t line and will never intersect it
+       !! in this case add 2pi to its phase trajectory to include it.
+       fn = real(tmpPsi(1))
+       if (fn < 0.0) then
+          do kk = 1, output_parameters % num_axial_points
+             tmpPsi(kk) = tmpPsi(kk) + 2.0*pi
+          end do
+       end if
+
+       !! loop on z
+       z = dz
+       part_plotted = .false.
+       kk = 2
+       do while (kk <= output_parameters % num_axial_points &
+            .and. .not. part_plotted)
+          fn = real(tmpPsi(kk)) - betae * z
+          !print*, 'j=',j,'kk=',kk, fn
+          !pause
+          !! when fn goes negative interpolate between these two points
+          if (fn < 0.0) then
+             dPsi = real(tmpPsi(kk)) - real(tmpPsi(kk-1))
+             z_part = ((dPsi/dz)*(z-dz) - real(tmpPsi(kk-1))) &
+                  /(dPsi/dz - betae)
+             
+             dv = real(tmpV(kk)) - real(tmpV(kk-1))
+             v_part = (dv/dz)*(z_part - (z - dz)) + real(tmpV(kk-1))
+             
+             if (units_structure % length_cm) then
+                z_part = z_part * 100.0
+                v_part = v_part * 100.0
+             end if
+             write(1,fmt="(en20.8, en20.8)") z_part, v_part
+             part_plotted = .true.
+          end if
+          z = z + dz
+          kk = kk + 1
+       end do
+    end do
+    close(1)
+  end subroutine phase_space
+
+  !! maybe change name of this routine to "SP" if it isn't compatible
+  !! with frequency scans. if do this, can simplfy file naming scheme
+  subroutine power_out_vs_freq(Y_vect, scanNumber)
+    complex(dp), dimension(:), intent(in) :: Y_vect
+    integer, intent(in) :: scanNumber
+    !local variables
+    character(len=30) filename
+    integer i
+    complex(dp), dimension(:), allocatable :: tmpY
+    real(dp) tmpPower
+
+    if (run_two) then
+       print*, '  generating pow_vs_freq file'
+    end if
+
+    if (scanNumber == 0) then
+       write(filename,fmt="(A22, A1, A7)") './outputs/pow_vs_freq.', &
+            modelID, '.sp.dat'
+       open(1,file=filename,action='write')
+    else
+       if (scanNumber < 10) then
+          write(filename,fmt="(A22, A1, A1, I1, A4)") &
+               './outputs/pow_vs_freq.', modelID, '.', scanNumber, '.dat'
+       else if (scanNumber < 100) then
+          write(filename,fmt="(A22, A1, A1, I2, A4)") &
+               './outputs/pow_vs_freq.', modelID, '.', scanNumber, '.dat'
+       end if
+       open(1,file=filename,action='write')
+    end if
+
+    if (output_parameters % file_headers) then
+       if (modelID=='L') then
+          write(1,fmt="(A5)") 'LATTE'
+       else if (modelID=='M') then
+          write(1,fmt="(A4)") 'MUSE'
+       else
+          write(1,fmt="(A6)") 'S-MUSE'
+       end if
+       write(1,fmt="(A52)") &
+            'circuit power (column 2) versus frequency (column 1)'
+    end if
+
+    allocate(tmpY(n_eqns))
+    tmpY = Y_vect
+
+    !! unnormalize the vector
+    if (modelID=='L') then
+       call unnorm_latte_vector(tmpY)
+    else
+       call unnorm_muse_vector(tmpY)
+    end if
+
+    !!loop over frequencies
+    do i = first_ckt_index, last_ckt_index
+       if (modelID=='L') then
+          if (.not. run_parameters % svea) then
+             !! the "real" power, I*V
+             tmpPower = - (tmpY(i)*conjg(tmpY(i+M)) &
+                  + conjg(tmpY(i))*tmpY(i+M))
+          else
+             !! the "other" power, 2V^2/K
+             tmpPower =  2.0*tmpY(i)*conjg(tmpY(i)) &
+                  /K(circuit_parameters % circuit_length,i)
+          end if
+       else !! MUSE, S-MUSE
+          tmpPower = - (tmpY(i)*conjg(tmpY(i+M+1)) &
+               + conjg(tmpY(i))*tmpY(i+M+1))
+       end if
+       
+       !convert tmpPower to dBm
+       if (units_structure % output_power_dBm) then
+          if (tmpPower <= 0.0) then
+             tmpPower = -100.0
+          else
+             tmpPower = 10.0 * log10(tmpPower/0.001)
+          end if
+       end if
+       write(1, fmt="(I15, en15.5)") fl(i), tmpPower
+    end do
+
+    close(1)
+  end subroutine power_out_vs_freq
+
+  !! maybe change name of this routine to "SP" if it isn't compatible
+  !! with frequency scans. if do this, can simplfy file naming scheme
+  subroutine phase_vs_freq(Y_vect, scanNumber)
+    complex(dp), dimension(:), intent(in) :: Y_vect
+    integer, intent(in) :: scanNumber
+    !local variables
+    character(len=32) filename
+    integer i
+    complex(dp), dimension(:), allocatable :: tmpY
+    real(dp) tmpPhase
+
+    if (run_two) then
+       print*, '  generating phase_vs_freq file'
+    end if
+
+    if (scanNumber == 0) then
+       write(filename,fmt="(A24, A1, A7)") './outputs/phase_vs_freq.', &
+            modelID, '.sp.dat'
+       open(1,file=filename,action='write')
+    else
+       if (scanNumber < 10) then
+          write(filename,fmt="(A24, A1, A1, I1, A4)") &
+               './outputs/phase_vs_freq.', modelID, '.', scanNumber, '.dat'
+       else if (scanNumber < 100) then
+          write(filename,fmt="(A24, A1, A1, I2, A4)") &
+               './outputs/phase_vs_freq.', modelID, '.', scanNumber, '.dat'
+       end if
+       open(1,file=filename,action='write')
+    end if
+
+    if (output_parameters % file_headers) then
+       if (modelID=='L') then
+          write(1,fmt="(A5)") 'LATTE'
+       else if (modelID=='M') then
+          write(1,fmt="(A4)") 'MUSE'
+       else
+          write(1,fmt="(A6)") 'S-MUSE'
+       end if
+       write(1,fmt="(A52)") &
+            'voltage phase (column 2) versus frequency (column 1)'
+    end if
+
+    allocate(tmpY(n_eqns))
+    tmpY = Y_vect
+
+    !! unnormalize the vector
+    if (modelID=='L') then
+       call unnorm_latte_vector(tmpY)
+    else
+       call unnorm_muse_vector(tmpY)
+    end if
+
+    !!loop over frequencies
+    do i = first_ckt_index, last_ckt_index
+       !! voltage phase model independent
+       tmpPhase = atan2(aimag(tmpY(i)),real(tmpY(i)))
+       
+       !convert radians to degrees
+       if (units_structure % phase_degrees) then
+          tmpPhase = 180.0 * tmpPhase / pi
+       end if
+
+       write(1, fmt="(I15, en15.5)") fl(i), tmpPhase
+    end do
+
+    close(1)
+  end subroutine phase_vs_freq
+
+  subroutine vs_power_in_plots(plot_cube, scanNumber, freq_ind, two_parameter)
+    complex(dp), dimension(:,:,:), intent(in) :: plot_cube
+    integer, intent(in) :: scanNumber
+    integer, intent(in) :: freq_ind
+    logical, intent(in) :: two_parameter
+    !local variables
+    logical :: dispersion_scan_flag = .false.
+    character(len=33) :: filename
+    integer :: i, ii, j, tmpNumPoints, pc_ctr
+    real(dp) :: P_in, P_out, gain, phi_out, origDisp
+    real(dp), dimension(:), allocatable :: phi_offset
+    complex(dp), dimension(:), allocatable :: tmpY0, tmpYL
+
+    if (run_two) then
+       if (output_parameters % power_out_vs_power_in) then
+          print*, '  generating pout_vs_pin.X.N.dat file'
+       end if
+       if (output_parameters % gain_vs_power_in) then
+          print*, '  generating gain_vs_pin.X.N.dat file'
+       end if
+       if (output_parameters % phase_out_vs_power_in) then
+          print*, '  generating phase_vs_pin.X.N.dat file'
+       end if
+    end if
+
+    !! create the files
+    if (output_parameters % power_out_vs_power_in) then
+       if (scanNumber < 10) then
+          write(filename,fmt="(A22, A1, A1, I1, A4)") &
+               './outputs/pout_vs_pin.', modelID, '.', scanNumber, '.dat'
+       else if (scanNumber < 100) then
+          write(filename,fmt="(A22, A1, A1, I2, A4)") &
+               './outputs/pout_vs_pin.', modelID, '.', scanNumber, '.dat'
+       end if
+       open(1,file=filename,action='write')
+    end if
+    if (output_parameters % gain_vs_power_in) then
+       if (scanNumber < 10) then
+          write(filename,fmt="(A22, A1, A1, I1, A4)") &
+               './outputs/gain_vs_pin.', modelID, '.', scanNumber, '.dat'
+       else if (scanNumber < 100) then
+          write(filename,fmt="(A22, A1, A1, I2, A4)") &
+               './outputs/gain_vs_pin.', modelID, '.', scanNumber, '.dat'
+       end if
+       open(2,file=filename,action='write')
+    end if
+    if (output_parameters % phase_out_vs_power_in) then
+       if (scanNumber < 10) then
+          write(filename,fmt="(A23, A1, A1, I1, A4)") &
+               './outputs/phase_vs_pin.', modelID, '.', scanNumber, '.dat'
+       else if (scanNumber < 100) then
+          write(filename,fmt="(A23, A1, A1, I2, A4)") &
+               './outputs/phase_vs_pin.', modelID, '.', scanNumber, '.dat'
+       end if
+       open(3,file=filename,action='write')
+    end if
+
+    !! write the headers
+    if (output_parameters % file_headers) then
+       if (output_parameters % power_out_vs_power_in) then
+          if (modelID=='L') then
+             write(1,fmt="(A5)") 'LATTE'
+          else if (modelID=='M') then
+             write(1,fmt="(A4)") 'MUSE'
+          else
+             write(1,fmt="(A6)") 'S-MUSE'
+          end if
+
+          write(1,fmt="(A25)") 'power out versus power in'
+          !! input power is always outer scan when this routine is called
+          write(1,fmt="(A6,I3)") 'Scan #', scanNumber
+
+          if (two_parameter) then
+             write(1,fmt="(A40, I2)") &
+                  'two parameter scan coupled with scanID =', &
+                  run_parameters % scan_data_array(scanNumber+1) % scanID
+             if (run_parameters % &
+                  scan_data_array(scanNumber) % logic_param_1) then
+                write(1,fmt="(A27)") 'column = value #, frequency'
+                !! write the column headers
+                write(1,fmt="(A15)", advance='no') 'P_in'
+                do i = 1, run_parameters % &
+                     scan_data_array(scanNumber+1) % num_points
+                   do j = first_ckt_index, last_ckt_index
+                      write(1,fmt="(I7,I8)", advance='no') i, fl(j)
+                   end do
+                end do
+                write(1,fmt="(A1)")
+             else
+                write(1,fmt="(A11, I5)") 'frequency =', fl(freq_ind)
+                write(1,fmt="(A16)") 'column = value #'
+                !! write the column headers
+                write(1,fmt="(A15)", advance='no') 'P_in'
+                do i = 1, run_parameters % &
+                     scan_data_array(scanNumber+1) % num_points
+                   write(1,fmt="(I15)", advance='no') i
+                end do
+                write(1,fmt="(A1)")
+             end if
+          else
+             if (run_parameters % &
+                  scan_data_array(scanNumber) % logic_param_1) then
+                write(1,fmt="(A18)") 'column = frequency'
+                !! write the column headers
+                write(1,fmt="(A15)", advance='no') 'P_in'
+                do j = first_ckt_index, last_ckt_index
+                   write(1,fmt="(I15)", advance='no') fl(j)
+                end do
+                write(1,fmt="(A1)")
+             else
+                write(1,fmt="(A11, I5)") 'frequency =', fl(freq_ind)
+                !! write the column headers
+                write(1,fmt="(A15)", advance='no') 'P_in'
+                write(1,fmt="(I15)") fl(freq_ind)
+             end if
+          end if
+       end if
+
+       if (output_parameters % gain_vs_power_in) then
+          if (modelID=='L') then
+             write(2,fmt="(A5)") 'LATTE'
+          else if (modelID=='M') then
+             write(2,fmt="(A4)") 'MUSE'
+          else
+             write(2,fmt="(A6)") 'S-MUSE'
+          end if
+
+          write(2,fmt="(A20)") 'gain versus power in'
+          !! input power is always outer scan when this is called
+          write(2,fmt="(A6,I3)") 'Scan #', scanNumber
+
+          if (two_parameter) then
+             write(2,fmt="(A40, I2)") &
+                  'two parameter scan coupled with scanID =', &
+                  run_parameters % scan_data_array(scanNumber+1) % scanID
+             if (run_parameters % &
+                  scan_data_array(scanNumber) % logic_param_1) then
+                write(2,fmt="(A27)") 'column = value #, frequency'
+                !! write the column headers
+                write(2,fmt="(A15)", advance='no') 'P_in'
+                do i = 1, run_parameters % &
+                     scan_data_array(scanNumber+1) % num_points
+                   do j = first_ckt_index, last_ckt_index
+                      write(2,fmt="(I7,I8)", advance='no') i, fl(j)
+                   end do
+                end do
+                write(2,fmt="(A1)")
+             else
+                write(2,fmt="(A11, I5)") 'frequency =', fl(freq_ind)
+                write(2,fmt="(A16)") 'column = value #'
+                !! write the column headers
+                write(2,fmt="(A15)", advance='no') 'P_in'
+                do i = 1, run_parameters % &
+                     scan_data_array(scanNumber+1) % num_points
+                   write(2,fmt="(I15)", advance='no') i
+                end do
+                write(2,fmt="(A1)")
+             end if
+          else
+             if (run_parameters % &
+                  scan_data_array(scanNumber) % logic_param_1) then
+                write(2,fmt="(A18)") 'column = frequency'
+                !! write the column headers
+                write(2,fmt="(A15)", advance='no') 'P_in'
+                do j = first_ckt_index, last_ckt_index
+                   write(2,fmt="(I15)", advance='no') fl(j)
+                end do
+                write(2,fmt="(A1)")
+             else
+                write(2,fmt="(A11, I5)") 'frequency =', fl(freq_ind)
+                !! write the column headers
+                write(2,fmt="(A15)", advance='no') 'P_in'
+                write(2,fmt="(I15)") fl(freq_ind)
+             end if
+          end if
+       end if
+       if (output_parameters % phase_out_vs_power_in) then
+          if (modelID=='L') then
+             write(3,fmt="(A5)") 'LATTE'
+          else if (modelID=='M') then
+             write(3,fmt="(A4)") 'MUSE'
+          else
+             write(3,fmt="(A6)") 'S-MUSE'
+          end if
+
+          write(3,fmt="(A25)") 'phase out versus power in'
+          !! input power is always outer scan when this is called
+          write(3,fmt="(A6,I3)") 'Scan #', scanNumber
+
+          if (two_parameter) then
+             write(3,fmt="(A40, I2)") &
+                  'two parameter scan coupled with scanID =', &
+                  run_parameters % scan_data_array(scanNumber+1) % scanID
+             if (run_parameters % &
+                  scan_data_array(scanNumber) % logic_param_1) then
+                write(3,fmt="(A27)") 'column = value #, frequency'
+                !! write the column headers
+                write(3,fmt="(A15)", advance='no') 'P_in'
+                do i = 1, run_parameters % &
+                     scan_data_array(scanNumber+1) % num_points
+                   do j = first_ckt_index, last_ckt_index
+                      write(3,fmt="(I7,I8)", advance='no') i, fl(j)
+                   end do
+                end do
+                write(3,fmt="(A1)")
+             else
+                write(3,fmt="(A11, I5)") 'frequency =', fl(freq_ind)
+                write(3,fmt="(A16)") 'column = value #'
+                !! write the column headers
+                write(3,fmt="(A15)", advance='no') 'P_in'
+                do i = 1, run_parameters % &
+                     scan_data_array(scanNumber+1) % num_points
+                   write(3,fmt="(I15)", advance='no') i
+                end do
+                write(3,fmt="(A1)")
+             end if
+          else
+             if (run_parameters % &
+                  scan_data_array(scanNumber) % logic_param_1) then
+                write(3,fmt="(A18)") 'column = frequency'
+                !! write the column headers
+                write(3,fmt="(A15)", advance='no') 'P_in'
+                do j = first_ckt_index, last_ckt_index
+                   write(3,fmt="(I15)", advance='no') fl(j)
+                end do
+                write(3,fmt="(A1)")
+             else
+                write(3,fmt="(A11, I5)") 'frequency =', fl(freq_ind)
+                !! write the column headers
+                write(3,fmt="(A15)", advance='no') 'P_in'
+                write(3,fmt="(I15)") fl(freq_ind)
+             end if
+          end if
+       end if
+    end if !! end if file_headers
+
+    !!allocate vectors used in unnormalization
+    allocate(tmpY0(n_eqns))
+    allocate(tmpYL(n_eqns))
+
+    if (.not. two_parameter) then
+       tmpNumPoints = 1
+       dispersion_scan_flag = .false.
+    else
+       tmpNumPoints = &
+            run_parameters % scan_data_array(scanNumber+1) % num_points
+       if (run_parameters % scan_data_array(scanNumber+1) % scanID == 4) then
+	 dispersion_scan_flag = .true.
+       else
+	 dispersion_scan_flag = .false.
+       end if
+    end if
+
+    !!phi_offset array keeps track of small signal phase to subtract
+    allocate(phi_offset(tmpNumPoints))
+    pc_ctr = 1 !! counts first index of plot_cube
+
+    !! write the file
+    !! i loops on input powers, makes row
+    do i = 1, run_parameters % scan_data_array(scanNumber) % num_points
+       !! if not a two parameter scan, middle loop just runs once.
+       do ii = 1, tmpNumPoints
+          !! if dispersion_scan set the dispersion to match the first pass
+          if (dispersion_scan_flag) then
+             call recompute_dispersion(scanNumber+1, ii, origDisp)
+          end if
+
+          tmpY0 = plot_cube(pc_ctr,1,:)
+          if (vs_z_plot) then
+             tmpYL = plot_cube(pc_ctr,output_parameters % num_axial_points,:)
+          else
+             tmpYL = plot_cube(pc_ctr,2,:)
+          end if
+
+          !! unnormalize
+          if (modelID=='L') then
+             call unnorm_latte_vector(tmpY0)
+             call unnorm_latte_vector(tmpYL)
+          else
+             call unnorm_muse_vector(tmpY0)
+             call unnorm_muse_vector(tmpYL)
+          end if
+
+          !! compute input power, write it to first row
+          if (modelID=='L') then
+             if (.not. run_parameters % svea) then
+                !! the "real" power, I*V
+                P_in = -(tmpY0(freq_ind) * conjg(tmpY0(freq_ind+M)) &
+                  + conjg(tmpY0(freq_ind)) * tmpY0(freq_ind+M))
+             else
+                !! the "other" power, 2V^2/K
+                P_in =  2.0*tmpY0(freq_ind)*conjg(tmpY0(freq_ind)) &
+                  /K(0.0d0,freq_ind)
+             end if
+          else !! MUSE, S-MUSE
+             P_in = -(tmpY0(freq_ind) * conjg(tmpY0(freq_ind+M+1)) &
+                  + conjg(tmpY0(freq_ind)) * tmpY0(freq_ind+M+1))
+          end if
+          if (units_structure % input_power_dBm) then
+             P_in = 10.0*log10(P_in/0.001)
+          end if
+
+          if (ii == 1) then !! write the first column
+             if (output_parameters % power_out_vs_power_in) then
+                write(1, fmt="(en15.5)", advance='no') P_in
+             end if
+             if (output_parameters % gain_vs_power_in) then
+                write(2, fmt="(en15.5)", advance='no') P_in
+             end if
+             if (output_parameters % phase_out_vs_power_in) then
+                write(3, fmt="(en15.5)", advance='no') P_in
+             end if
+          end if
+
+          !! reconvert P_in to watts for gain calculations
+          if (units_structure % input_power_dBm) then
+             P_in = 10.0**(P_in/10.0) * 0.001
+          end if
+
+          if (run_parameters % &
+               scan_data_array(scanNumber) % logic_param_1) then
+             !! loop on frequency
+             do j = first_ckt_index, last_ckt_index
+                if (modelID=='L') then
+                   if (.not. run_parameters % svea) then
+                      !! the "real" power, I*V
+                      P_out = -(tmpYL(j) * conjg(tmpYL(j+M)) &
+                           + conjg(tmpYL(j)) * tmpYL(j+M))
+                   else
+                      !! the "other" power, 2V^2/K
+                      P_out =  2.0*tmpYL(j)*conjg(tmpYL(j)) &
+                           /K(circuit_parameters % circuit_length,j)
+                   end if
+                else !!MUSE, S-MUSE
+                   P_out = -(tmpYL(j) * conjg(tmpYL(j+M+1)) &
+                        + conjg(tmpYL(j)) * tmpYL(j+M+1))
+                end if
+
+                !!compute the gain
+                gain = P_out/P_in
+                
+                if (P_out < 0.0) then
+                   P_out = 1.0e-15
+                end if
+
+                if (units_structure % output_power_dBm) then
+                   P_out = 10.0*log10(P_out/0.001)
+                   gain = 10.0*log10(gain)
+                end if
+
+                !! output phase, model independent
+                !! not subtracting off small signal phase, b/c would need
+                !! to make a matrix of ss phases. can do later.
+                phi_out = atan2(aimag(tmpYL(j)),real(tmpYL(j)))
+                if (units_structure % phase_degrees) then
+                   phi_out = phi_out * 180.0/pi
+                end if
+
+                !! write the data
+                if (output_parameters % power_out_vs_power_in) then
+                   write(1, fmt="(en15.5)", advance='no') P_out
+                end if
+                if (output_parameters % gain_vs_power_in) then
+                   write(2, fmt="(en15.5)", advance='no') gain
+                end if
+                if (output_parameters % phase_out_vs_power_in) then
+                   write(3, fmt="(en15.5)", advance='no') phi_out
+                end if
+             end do !! end frequency loop
+          else !! just information at the one frequency.
+             if (modelID=='L') then
+                if (.not. run_parameters % svea) then
+                   !! the "real" power, I*V
+                   P_out = -(tmpYL(freq_ind) * conjg(tmpYL(freq_ind+M)) &
+                        + conjg(tmpYL(freq_ind)) * tmpYL(freq_ind+M))
+                else
+                   !! the "other" power, 2V^2/K
+                   P_out =  2.0*tmpYL(freq_ind)*conjg(tmpYL(freq_ind)) &
+                        /K(circuit_parameters % circuit_length,freq_ind)
+                end if
+             else !!MUSE, S-MUSE
+                P_out = -(tmpYL(freq_ind) * conjg(tmpYL(freq_ind+M+1)) &
+                     + conjg(tmpYL(freq_ind)) * tmpYL(freq_ind+M+1))
+             end if
+
+             !!compute the gain
+             gain = P_out/P_in
+
+             if (P_out < 0.0) then
+                P_out = 1.0e-15
+             end if
+
+             if (units_structure % output_power_dBm) then
+                P_out = 10.0*log10(P_out/0.001)
+                gain = 10.0*log10(gain)
+             end if
+
+             !!offset phase so that small signal phase is zero
+             if (i==1) then
+                phi_offset(ii) = &
+                     atan2(aimag(tmpYL(freq_ind)),real(tmpYL(freq_ind)))
+		! add lines below to NOT subtract off small signal phase
+		print*, 'offset removed!'
+  		phi_offset(ii) = 0.0
+             end if
+             !! output phase, model independent
+             phi_out = atan2(aimag(tmpYL(freq_ind)),real(tmpYL(freq_ind))) &
+                  - phi_offset(ii)
+
+             if (units_structure % phase_degrees) then
+                phi_out = phi_out * 180.0/pi
+             end if
+
+             !! write the data
+             if (output_parameters % power_out_vs_power_in) then
+                write(1, fmt="(en15.5)", advance='no') P_out
+             end if
+             if (output_parameters % gain_vs_power_in) then
+                write(2, fmt="(en15.5)", advance='no') gain
+             end if
+             if (output_parameters % phase_out_vs_power_in) then
+                write(3, fmt="(en15.5)", advance='no') phi_out
+             end if
+          end if
+
+          if (ii == tmpNumPoints) then !! carraige return
+             if (output_parameters % power_out_vs_power_in) then
+                write(1, fmt="(A1)")
+             end if
+             if (output_parameters % gain_vs_power_in) then
+                write(2, fmt="(A1)")
+             end if
+             if (output_parameters % phase_out_vs_power_in) then
+                write(3, fmt="(A1)")
+             end if
+          end if
+
+          !!reset the dispersion with the original value
+          if (dispersion_scan_flag) then
+             call reset_dispersion(scanNumber+1, origDisp)
+          end if
+
+          pc_ctr = pc_ctr + 1
+       end do
+    end do
+    
+    deallocate(tmpY0)
+    deallocate(tmpYL)
+
+    close(1)
+    close(2)
+    close(3)
+  end subroutine vs_power_in_plots
+
+  subroutine frequency_scan_plots(plot_cube, scanNumber)
+    complex(dp), dimension(:,:,:), intent(in) :: plot_cube
+    integer, intent(in) :: scanNumber
+
+    ! local variables
+    character(len=33) :: filename
+    integer :: i, j, input_index, output_index
+    integer :: freq_index, min_fi, max_fi, npts, tmp_fi, delta_fi
+    real(dp) :: P_out, P_in, gain, phi_out
+    complex(dp), dimension(:), allocatable :: tmpY0, tmpYL
+
+    if (run_two) then
+       if (output_parameters % power_out_vs_freq) then
+          print*, '  generating pout_vs_freq.X.N.dat file'
+       end if
+       if (output_parameters % gain_vs_freq) then
+          print*, '  generating gain_vs_freq.X.N.dat file'
+       end if
+       if (output_parameters % phase_vs_freq) then
+          print*, '  generating phase_vs_freq.X.N.dat file'
+       end if
+    end if
+
+    !! find index of fl() of scanning frequency
+    do i = 1, M
+       !! this works for all versions of fl() since the scanned frequency
+       !! is bound above and below by its neighbors. so even though fl()
+       !! array changes for each run of scan, input_index does not.
+       if (frequency_parameters % frequency_integer(run_parameters % &
+            scan_data_array(scanNumber) % int_param_1) == fl(i)) then
+          input_index = i
+       end if
+    end do
+
+    !! find index of fl() to generate output at, output_index
+    if (run_parameters % scan_data_array(scanNumber) % logic_param_1) then
+       !! want outputs at a frequency other than scanned freq
+
+       !! check that the frequency index is acceptable
+       if (run_parameters % scan_data_array(scanNumber) % int_param_2 &
+            < first_ckt_index .or. &
+            run_parameters % scan_data_array(scanNumber) % int_param_2 &
+            > last_ckt_index) then
+          print*, 'In scan #', scanNumber,', function frequency_scan_plots:'
+          print*, 'The requested frequency index for output (int_param_2) is not a circuit'
+          print*, 'frequency. Skipping plot routine.'
+          return
+       else !! set the output_index to int_param_2
+          output_index = &
+               run_parameters % scan_data_array(scanNumber) % int_param_2
+       end if
+    else
+       !! want outputs at scanned freq, set output_index to input_index
+       output_index = input_index
+    end if
+
+    !! create the files
+    if (output_parameters % power_out_vs_freq) then
+       if (scanNumber < 10) then
+          write(filename,fmt="(A23, A1, A1, I1, A4)") &
+               './outputs/pout_vs_freq.', modelID, '.', scanNumber, '.dat'
+       else if (scanNumber < 100) then
+          write(filename,fmt="(A23, A1, A1, I2, A4)") &
+               './outputs/pout_vs_freq.', modelID, '.', scanNumber, '.dat'
+       end if
+       open(1,file=filename,action='write')
+    end if
+    if (output_parameters % gain_vs_freq) then
+       if (scanNumber < 10) then
+          write(filename,fmt="(A23, A1, A1, I1, A4)") &
+               './outputs/gain_vs_freq.', modelID, '.', scanNumber, '.dat'
+       else if (scanNumber < 100) then
+          write(filename,fmt="(A23, A1, A1, I2, A4)") &
+               './outputs/gain_vs_freq.', modelID, '.', scanNumber, '.dat'
+       end if
+       open(2,file=filename,action='write')
+    end if
+    if (output_parameters % phase_vs_freq) then
+       if (scanNumber < 10) then
+          write(filename,fmt="(A24, A1, A1, I1, A4)") &
+               './outputs/phase_vs_freq.', modelID, '.', scanNumber, '.dat'
+       else if (scanNumber < 100) then
+          write(filename,fmt="(A24, A1, A1, I2, A4)") &
+               './outputs/phase_vs_freq.', modelID, '.', scanNumber, '.dat'
+       end if
+       open(3,file=filename,action='write')
+    end if
+
+    !! write the file headers
+    if (output_parameters % file_headers) then
+       if (output_parameters % power_out_vs_freq) then
+          if (modelID=='L') then
+             write(1,fmt="(A5)") 'LATTE'
+          else if (modelID=='M') then
+             write(1,fmt="(A4)") 'MUSE'
+          else
+             write(1,fmt="(A6)") 'S-MUSE'
+          end if
+
+          write(1,fmt="(A28,I5,A31,I10)") 'power out at frequency index', &
+               output_index, ' versus scanned frequency index', input_index
+          write(1,fmt="(A6,I3)") 'Scan #', scanNumber
+
+          !! write the column headers
+          write(1,fmt="(A15)", advance='no') 'frequency'
+          write(1,fmt="(A15)") 'P_out'
+       end if
+
+       if (output_parameters % gain_vs_freq) then
+          if (modelID=='L') then
+             write(2,fmt="(A5)") 'LATTE'
+          else if (modelID=='M') then
+             write(2,fmt="(A4)") 'MUSE'
+          else
+             write(2,fmt="(A6)") 'S-MUSE'
+          end if
+
+          write(2,fmt="(A23,I10,A31,I10)") 'gain at frequency index', &
+               output_index, ' versus scanned frequency index', input_index
+          write(2,fmt="(A6,I3)") 'Scan #', scanNumber
+
+          !! write the column headers
+          write(2,fmt="(A15)", advance='no') 'frequency'
+          write(2,fmt="(A15)") 'gain'
+       end if
+
+       if (output_parameters % phase_vs_freq) then
+          if (modelID=='L') then
+             write(3,fmt="(A5)") 'LATTE'
+          else if (modelID=='M') then
+             write(3,fmt="(A4)") 'MUSE'
+          else
+             write(3,fmt="(A6)") 'S-MUSE'
+          end if
+
+          write(3,fmt="(A24,I10,A31,I10)") 'phase at frequency index', &
+               output_index, ' versus scanned frequency index', input_index
+          write(3,fmt="(A6,I3)") 'Scan #', scanNumber
+
+          !! write the column headers
+          write(3,fmt="(A15)", advance='no') 'frequency'
+          write(3,fmt="(A15)") 'phase'
+       end if
+    end if !! end if file_headers
+
+    !!allocate vectors used in unnormalization
+    allocate(tmpY0(n_eqns))
+    allocate(tmpYL(n_eqns))
+
+    !! to run the loop need to recompute all frequencies as in the scan
+    min_fi = run_parameters % scan_data_array(scanNumber) % min
+    max_fi = run_parameters % scan_data_array(scanNumber) % max
+    npts = run_parameters % scan_data_array(scanNumber) % num_points
+
+    !! the index of frequency_integer scanned
+    freq_index = run_parameters % scan_data_array(scanNumber) % int_param_1
+
+    delta_fi = (max_fi - min_fi)/(npts - 1)
+    tmp_fi = min_fi
+
+    !! write the files
+    do i = 1, npts
+       !! in final loop force tmp_fi to be max_fi in case delta_fi off a bit
+       if (i == npts) then
+          tmp_fi = max_fi
+       end if
+
+       !! assign the tmp_fi to the frequency integer array
+       frequency_parameters % frequency_integer(freq_index) = tmp_fi
+
+       !! recompute frequencies
+       ! destroy fl array
+       deallocate(fl)
+       ! make new fl array
+       call create_frequency_array(.false.)
+
+       !! recompute dispersion
+       call compute_dispersion_arrays
+       call derived_ckt_qtys(R_matrix, L_matrix, G_matrix, C_matrix, pC_matrix)
+
+       !! get the vectors with the data
+       tmpY0 = plot_cube(i,1,:)
+       if (vs_z_plot) then
+          tmpYL = plot_cube(i,output_parameters % num_axial_points,:)
+       else
+          tmpYL = plot_cube(i,2,:)
+       end if
+
+       !! unnormalize
+       if (modelID=='L') then
+          call unnorm_latte_vector(tmpY0)
+          call unnorm_latte_vector(tmpYL)
+       else
+          call unnorm_muse_vector(tmpY0)
+          call unnorm_muse_vector(tmpYL)
+       end if
+
+       !! compute input and output power
+       if (modelID=='L') then
+          if (.not. run_parameters % svea) then
+             !! the "real" power, I*V
+             P_in = -(tmpY0(output_index) * conjg(tmpY0(output_index+M)) &
+                  + conjg(tmpY0(output_index)) * tmpY0(output_index+M))
+             P_out = -(tmpYL(output_index) * conjg(tmpYL(output_index+M)) &
+                  + conjg(tmpYL(output_index)) * tmpYL(output_index+M))
+          else
+             !! the "other" power, 2V^2/K
+             P_in =  2.0*tmpY0(output_index)*conjg(tmpY0(output_index)) &
+                  /K(0.0d0,output_index)
+             P_out =  2.0*tmpYL(output_index)*conjg(tmpYL(output_index)) &
+                  /K(circuit_parameters % circuit_length,output_index)
+          end if
+       else !! MUSE, S-MUSE
+          P_in = -(tmpY0(output_index) * conjg(tmpY0(output_index+M+1)) &
+               + conjg(tmpY0(output_index)) * tmpY0(output_index+M+1))
+          P_out = -(tmpYL(output_index) * conjg(tmpYL(output_index+M+1)) &
+               + conjg(tmpYL(output_index)) * tmpYL(output_index+M+1))
+       end if
+
+       !! output phase, model independent
+       phi_out = atan2(aimag(tmpYL(output_index)),real(tmpYL(output_index)))
+       if (units_structure % phase_degrees) then
+          phi_out = phi_out * 180.0/pi
+       end if
+
+       !!compute the gain
+       gain = P_out/P_in
+
+       if (P_out < 0.0) then
+          P_out = 1.0e-15
+       end if
+
+       if (units_structure % output_power_dBm) then
+          P_out = 10.0*log10(P_out/0.001)
+          gain = 10.0*log10(gain)
+       end if
+
+       !! write the data
+       if (output_parameters % power_out_vs_freq) then
+          write(1, fmt="(I15, en15.5)") fl(input_index), P_out
+       end if
+       if (output_parameters % gain_vs_freq) then
+          !! only write gain if looking at scanned frequency
+          if (output_index /= input_index) then
+             write(2, fmt="(I15, A15)") fl(input_index), 'N/A'
+          else
+             write(2, fmt="(I15, en15.5)") fl(input_index), gain
+          end if
+       end if
+       if (output_parameters % phase_vs_freq) then
+          write(3, fmt="(I15, en15.5)") fl(input_index), phi_out
+       end if
+
+       tmp_fi = tmp_fi + delta_fi
+    end do
+
+    deallocate(tmpY0)
+    deallocate(tmpYL)
+
+    close(1)
+    close(2)
+    close(3)
+    
+  end subroutine frequency_scan_plots
+
+  subroutine power_out_vs_phase_in(plot_cube, scanNumber, freq_ind)
+    complex(dp), dimension(:,:,:), intent(in) :: plot_cube
+    integer, intent(in) :: scanNumber
+    integer, intent(in) :: freq_ind
+    !local variables
+    character(len=33) filename
+    integer i, j
+    real(dp) Phase_in, P_out
+    complex(dp), dimension(:), allocatable :: tmpY0, tmpYL
+
+    if (run_two) then
+       print*, '  generating power_out_vs_phase_in file'
+    end if
+
+    !! create the file
+    if (scanNumber < 10) then
+       write(filename,fmt="(A26, A1, A1, I1, A4)") &
+            './outputs/pout_vs_phasein.', &
+            modelID, '.', scanNumber, '.dat'
+    else if (scanNumber < 100) then
+       write(filename,fmt="(A26, A1, A1, I2, A4)") &
+            './outputs/pout_vs_phasein.', &
+            modelID, '.', scanNumber, '.dat'
+    end if
+
+    open(1,file=filename,action='write')
+
+    if (output_parameters % file_headers) then
+       if (modelID=='L') then
+          write(1,fmt="(A5)") 'LATTE'
+       else if (modelID=='M') then
+          write(1,fmt="(A4)") 'MUSE'
+       else
+          write(1,fmt="(A6)") 'S-MUSE'
+       end if
+
+       write(1,fmt="(A25)") 'power out versus phase in'
+       write(1,fmt="(A6,I3)") 'Scan #', scanNumber
+
+       if (run_parameters % &
+            scan_data_array(scanNumber) % logic_param_1) then
+          write(1,fmt="(A18)") 'column = frequency'
+          !! write the column headers
+          write(1,fmt="(A15)", advance='no') 'phase_in'
+          do j = first_ckt_index, last_ckt_index
+             write(1,fmt="(I15)", advance='no') fl(j)
+          end do
+          write(1,fmt="(A1)")
+       else
+          write(1,fmt="(A11, I5)") 'frequency =', fl(freq_ind)
+          !! write the column headers
+          write(1,fmt="(A15)", advance='no') 'phase_in'
+          write(1,fmt="(I15)") fl(freq_ind)
+       end if
+    end if
+
+
+    !!allocate vectors used in unnormalization
+    allocate(tmpY0(n_eqns))
+    allocate(tmpYL(n_eqns))
+
+    !! write the file
+    do i = 1, run_parameters % scan_data_array(scanNumber) % num_points
+       tmpY0 = plot_cube(i,1,:)
+       if (vs_z_plot) then
+          tmpYL = plot_cube(i,output_parameters % num_axial_points,:)
+       else
+          tmpYL = plot_cube(i,2,:)
+       end if
+
+       !! unnormalize
+       if (modelID=='L') then
+          call unnorm_latte_vector(tmpY0)
+          call unnorm_latte_vector(tmpYL)
+       else
+          call unnorm_muse_vector(tmpY0)
+          call unnorm_muse_vector(tmpYL)
+       end if
+
+       !!compute the input phase and write it to the first column
+       if (modelID=='L') then
+          Phase_in = atan2(aimag(tmpY0(freq_ind)),real(tmpY0(freq_ind)))
+       else !!MUSE, S-MUSE
+          Phase_in = atan2(aimag(tmpY0(freq_ind)),real(tmpY0(freq_ind)))
+       end if
+       if (units_structure % phase_degrees) then
+          Phase_in = Phase_in * 180.0 / pi
+       end if
+       write(1, fmt="(en15.5)", advance='no') Phase_in
+
+       if (run_parameters % &
+            scan_data_array(scanNumber) % logic_param_1) then
+          !write all of the frequencies
+          do j = first_ckt_index, last_ckt_index
+             if (modelID=='L') then
+                if (.not. run_parameters % svea) then
+                   !! the "real" power, I*V
+                   P_out = -(tmpYL(j) * conjg(tmpYL(j+M)) &
+                        + conjg(tmpYL(j)) * tmpYL(j+M))
+                else
+                   !! the "other" power, 2V^2/K
+                   P_out =  2.0*tmpYL(j)*conjg(tmpYL(j)) &
+                        /K(circuit_parameters % circuit_length,j)
+                end if
+             else !!MUSE, S-MUSE
+                P_out = -(tmpYL(j) * conjg(tmpYL(j+M+1)) &
+                     + conjg(tmpYL(j)) * tmpYL(j+M+1))
+             end if
+
+             if (P_out < 0.0) then
+                P_out = 1.0e-15
+             end if
+
+             if (units_structure % output_power_dBm) then
+                P_out = 10.0*log10(P_out/0.001)
+             end if
+             write(1, fmt="(en15.5)", advance='no') P_out
+          end do
+       else !just write data at freq_ind
+          if (modelID=='L') then
+             if (.not. run_parameters % svea) then
+                !! the "real" power, I*V
+                P_out = -(tmpYL(freq_ind) * conjg(tmpYL(freq_ind+M)) &
+                     + conjg(tmpYL(freq_ind)) * tmpYL(freq_ind+M))
+             else
+                !! the "other" power, 2V^2/K
+                P_out =  2.0*tmpYL(freq_ind)*conjg(tmpYL(freq_ind)) &
+                     /K(circuit_parameters % circuit_length,freq_ind)
+             end if
+          else !!MUSE, S-MUSE
+             P_out = -(tmpYL(freq_ind) * conjg(tmpYL(freq_ind+M+1)) &
+                  + conjg(tmpYL(freq_ind)) * tmpYL(freq_ind+M+1))
+          end if
+
+          if (P_out < 0.0) then
+             P_out = 1.0e-15
+          end if
+
+          if (units_structure % output_power_dBm) then
+             P_out = 10.0*log10(P_out/0.001)
+          end if
+
+          write(1, fmt="(en15.5)", advance='no') P_out
+       end if
+       write(1, fmt="(A1)")
+    end do
+    
+    close(1)
+  end subroutine power_out_vs_phase_in
+
+  subroutine phase_out_vs_phase_in(plot_cube, scanNumber, freq_ind)
+    complex(dp), dimension(:,:,:), intent(in) :: plot_cube
+    integer, intent(in) :: scanNumber
+    integer, intent(in) :: freq_ind
+    !local variables
+    character(len=38) :: filename
+    integer :: i, j
+    complex(dp) :: phase_factor
+    real(dp) :: Phase_in, Phase_out
+    complex(dp), dimension(:), allocatable :: tmpY0, tmpYL
+
+    if (run_two) then
+       print*, '  generating phase_out_vs_phase_in file'
+    end if
+
+    !! create the file
+    if (scanNumber < 10) then
+       write(filename,fmt="(A30, A1, A1, I1, A4)") &
+            './outputs/phaseout_vs_phasein.', &
+            modelID, '.', scanNumber, '.dat'
+    else if (scanNumber < 100) then
+       write(filename,fmt="(A30, A1, A1, I2, A4)") &
+            './outputs/phaseout_vs_phasein.', &
+            modelID, '.', scanNumber, '.dat'
+    end if
+
+    open(1,file=filename,action='write')
+
+    if (output_parameters % file_headers) then
+       if (modelID=='L') then
+          write(1,fmt="(A5)") 'LATTE'
+       else if (modelID=='M') then
+          write(1,fmt="(A4)") 'MUSE'
+       else
+          write(1,fmt="(A6)") 'S-MUSE'
+       end if
+
+       write(1,fmt="(A25)") 'power out versus phase in'
+       write(1,fmt="(A6,I3)") 'Scan #', scanNumber
+
+       if (run_parameters % &
+            scan_data_array(scanNumber) % logic_param_1) then
+          write(1,fmt="(A18)") 'column = frequency'
+          !! write the column headers
+          write(1,fmt="(A15)", advance='no') 'phase_in'
+          do j = first_ckt_index, last_ckt_index
+             write(1,fmt="(I15)", advance='no') fl(j)
+          end do
+          write(1,fmt="(A1)")
+       else
+          write(1,fmt="(A11, I5)") 'frequency =', fl(freq_ind)
+          !! write the column headers
+          write(1,fmt="(A15)", advance='no') 'phase_in'
+          write(1,fmt="(I15)") fl(freq_ind)
+       end if
+    end if
+
+
+    !!allocate vectors used in unnormalization
+    allocate(tmpY0(n_eqns))
+    allocate(tmpYL(n_eqns))
+
+    !! write the file
+    do i = 1, run_parameters % scan_data_array(scanNumber) % num_points
+       tmpY0 = plot_cube(i,1,:)
+       if (vs_z_plot) then
+          tmpYL = plot_cube(i,output_parameters % num_axial_points,:)
+       else
+          tmpYL = plot_cube(i,2,:)
+       end if
+
+       !! unnormalize
+       if (modelID=='L') then
+          call unnorm_latte_vector(tmpY0)
+          call unnorm_latte_vector(tmpYL)
+       else
+          call unnorm_muse_vector(tmpY0)
+          call unnorm_muse_vector(tmpYL)
+       end if
+
+
+       !!compute the input phase and write it to the first column
+       !! input phase not dependent on L,M,S
+       Phase_in = atan2(aimag(tmpY0(freq_ind)),real(tmpY0(freq_ind)))
+
+       if (units_structure % phase_degrees) then
+          Phase_in = Phase_in * 180.0 / pi
+       end if
+       write(1, fmt="(en15.5)", advance='no') Phase_in
+
+       if (run_parameters % &
+            scan_data_array(scanNumber) % logic_param_1) then
+          !write all of the frequencies
+          do j = first_ckt_index, last_ckt_index
+             phase_factor = &
+                  exp(smo*fl(j)*frequency_parameters % base_frequency &
+                  * 2.0 * pi * &
+                  (-1.0/vph(circuit_parameters % circuit_length,j) + &
+                  1.0/derived_qtys % u0)* circuit_parameters % circuit_length)
+
+             !! if referenced to stream wave, shift reference to cold ckt wave
+             if (.not. run_parameters % svea) then
+                tmpYL(j) = tmpYL(j) * phase_factor
+             end if
+
+             !! circuit voltage phase doesn't depend on L, M, S
+             Phase_out = atan2(aimag(tmpYL(j)), real(tmpYL(j)))
+
+             if (units_structure % phase_degrees) then
+                Phase_out = Phase_out * 180.0 / pi
+             end if
+             write(1, fmt="(en15.5)", advance='no') Phase_out
+          end do
+       else !just write data at freq_ind
+          phase_factor = &
+               exp(smo*fl(freq_ind)*frequency_parameters % base_frequency &
+               * 2.0 * pi * &
+               (-1.0/vph(circuit_parameters % circuit_length,freq_ind) + &
+               1.0/derived_qtys % u0)* circuit_parameters % circuit_length)
+
+          !! if referenced to stream wave, shift reference to cold ckt wave
+          if (.not. run_parameters % svea) then
+             tmpYL(freq_ind) = tmpYL(freq_ind) * phase_factor
+          end if
+
+          !! circuit voltage phase doesn't depend on L, M, S
+          Phase_out = atan2(aimag(tmpYL(freq_ind)), real(tmpYL(freq_ind)))
+
+          if (units_structure % phase_degrees) then
+             Phase_out = Phase_out * 180.0 / pi
+          end if
+
+          write(1, fmt="(en15.5)", advance='no') Phase_out
+       end if
+       write(1, fmt="(A1)")
+    end do
+    
+    close(1)
+  end subroutine phase_out_vs_phase_in
+
+  subroutine recompute_dispersion(scanNumber, value, origDisp)
+    integer, intent(in) :: scanNumber
+    integer, intent(in) :: value
+    real(dp), intent(inout) :: origDisp
+    !! local variables
+    integer :: i, disp_freq_ind, tmpSection
+    real(dp) :: deltaDisp, Disp_min, Disp_max, tmpDisp
+    
+    !! section where parameter is changed
+    tmpSection = run_parameters % scan_data_array(scanNumber) % int_param_3
+    
+    !! find the index of the frequency to be scanned
+    disp_freq_ind = 0
+    if (run_parameters % scan_data_array(scanNumber) % int_param_2 == 1 .or. &
+         run_parameters % scan_data_array(scanNumber) % int_param_2 == 2 .or. &
+         run_parameters % scan_data_array(scanNumber) % int_param_2 == 4) then
+       !!phase velocity, interaction impedance or spchredfact
+       do i = 1, dispersion_parameters % num_dispersion_freqs
+          if (dispersion_parameters % dispersion_freq_integer(tmpSection,i) &
+               == &
+               run_parameters % scan_data_array(scanNumber) % int_param_1) then
+             disp_freq_ind = i
+          end if
+       end do
+    else
+       !!loss
+       do i = 1, loss_parameters % number_loss_freqs
+          if (loss_parameters % loss_freq_integer(tmpSection,i) == &
+               run_parameters % scan_data_array(scanNumber) % int_param_1) then
+             disp_freq_ind = i
+          end if
+       end do
+    end if
+    
+    Disp_min = run_parameters % scan_data_array(scanNumber) % min
+    Disp_max = run_parameters % scan_data_array(scanNumber) % max
+    
+    if (run_parameters % scan_data_array(scanNumber) % int_param_2 == 1) then
+       !! phase_velocity
+       if (units_structure % length_cm) then
+          Disp_min = run_parameters % scan_data_array(scanNumber) % min / 100.0
+          Disp_max = run_parameters % scan_data_array(scanNumber) % max / 100.0
+       end if
+       ! highest priority: if vph_over_c convert to m/s
+       if (dispersion_parameters % vph_over_c) then
+          Disp_min = run_parameters % scan_data_array(scanNumber) % min * c
+          Disp_max = run_parameters % scan_data_array(scanNumber) % max * c
+       end if
+    else if (run_parameters % scan_data_array(scanNumber) &
+         % int_param_2 == 3) then
+       !! loss
+       if (.not. units_structure % nepers) then
+          Disp_min = Disp_min / 8.68589
+          Disp_max = Disp_max / 8.68589
+       end if
+       if (units_structure % length_cm) then
+          Disp_min = Disp_min * 100.0
+          Disp_max = Disp_max * 100.0
+       end if
+    end if
+
+    deltaDisp = (Disp_max - Disp_min) &
+         /(run_parameters % scan_data_array(scanNumber) % num_points - 1)
+    
+    tmpDisp = (value-1)*deltaDisp + Disp_min
+    
+    !! save dispersion values read from dispersion matrices to restore
+    if (run_parameters % scan_data_array(scanNumber) % int_param_2 == 1) then
+       !! phase_velocity
+       origDisp = dispersion_parameters % phase_velocity(tmpSection, &
+            disp_freq_ind)
+    else if &
+         (run_parameters % scan_data_array(scanNumber) % int_param_2 == 2) then
+       !! impedance
+       origDisp = dispersion_parameters % impedance(tmpSection, disp_freq_ind)
+    else if &
+         (run_parameters % scan_data_array(scanNumber) % int_param_2 == 3) then
+       !! losses
+       origDisp = loss_parameters % loss(tmpSection, disp_freq_ind)
+    else if &
+         (run_parameters % scan_data_array(scanNumber) % int_param_2 == 4) then
+       !! space_charge_redux
+       origDisp = dispersion_parameters % space_charge_redux(tmpSection, &
+            disp_freq_ind)
+    end if
+    
+    !! put the new data into the dispersion
+    !! if add intrplt_btwn_points to dispersion, will have to add
+    !! conditionals to int_param_1 == 1,2,4. see int_param_3.
+    if (run_parameters % scan_data_array(scanNumber) % &
+         int_param_2 == 1) then
+       !! phase_velocity
+       dispersion_parameters % phase_velocity(tmpSection, disp_freq_ind) &
+            = tmpDisp
+    else if (run_parameters % scan_data_array(scanNumber) % &
+         int_param_2 == 2) then
+       !! impedance
+       dispersion_parameters % impedance(tmpSection, disp_freq_ind) &
+            = tmpDisp
+    else if (run_parameters % scan_data_array(scanNumber) % &
+         int_param_2 == 3) then
+       !! losses
+       loss_parameters % loss(tmpSection, disp_freq_ind) = tmpDisp
+       if (loss_parameters % intrplt_btwn_points .and. &
+            tmpSection+1<=loss_parameters % number_loss_locations) then
+          loss_parameters % loss(tmpSection+1, disp_freq_ind) = tmpDisp
+       end if
+    else if (run_parameters % scan_data_array(scanNumber) % &
+         int_param_2 == 4) then
+       !! space_charge_redux
+       dispersion_parameters % space_charge_redux(tmpSection, &
+            disp_freq_ind) = tmpDisp
+    end if
+
+    !! recompute the dispersion
+    call compute_dispersion_arrays
+    call derived_ckt_qtys(R_matrix, L_matrix, G_matrix, C_matrix,&
+         pC_matrix)
+    
+  end subroutine recompute_dispersion
+  
+  subroutine reset_dispersion(scanNumber, origDisp)
+    integer, intent(in) :: scanNumber
+    real(dp), intent(in) :: origDisp
+    !! local variables
+    integer :: i, disp_freq_ind, tmpSection
+    
+    !! section where parameter is changed
+    tmpSection = run_parameters % scan_data_array(scanNumber) % int_param_3
+    
+    !! find the index of the frequency to be scanned
+    disp_freq_ind = 0
+    if (run_parameters % scan_data_array(scanNumber) % int_param_2 == 1 .or. &
+         run_parameters % scan_data_array(scanNumber) % int_param_2 == 2 .or. &
+         run_parameters % scan_data_array(scanNumber) % int_param_2 == 4) then
+       !!phase velocity, interaction impedance or spchredfact
+       do i = 1, dispersion_parameters % num_dispersion_freqs
+          if (dispersion_parameters % dispersion_freq_integer(tmpSection,i) &
+               == &
+               run_parameters % scan_data_array(scanNumber) % int_param_1) then
+             disp_freq_ind = i
+          end if
+       end do
+    else
+       !!loss
+       do i = 1, loss_parameters % number_loss_freqs
+          if (loss_parameters % loss_freq_integer(tmpSection,i) == &
+               run_parameters % scan_data_array(scanNumber) % int_param_1) then
+             disp_freq_ind = i
+          end if
+       end do
+    end if
+    
+    !! restore original dispersion values
+    if (run_parameters % scan_data_array(scanNumber) % int_param_2 == 1) then
+       !! phase_velocity
+       dispersion_parameters % phase_velocity(tmpSection, disp_freq_ind) &
+            = origDisp
+    else if (run_parameters % scan_data_array(scanNumber) % &
+         int_param_2 == 2) then
+       !! impedance
+       dispersion_parameters % impedance(tmpSection, disp_freq_ind) &
+            = origDisp
+    else if (run_parameters % scan_data_array(scanNumber) % &
+         int_param_2 == 3) then
+       !! losses
+       loss_parameters % loss(tmpSection, disp_freq_ind) = origDisp
+       if (loss_parameters % intrplt_btwn_points .and. &
+            tmpSection+1<=loss_parameters % number_loss_locations) then
+          loss_parameters % loss(tmpSection+1, disp_freq_ind) = origDisp
+       end if
+    else if (run_parameters % scan_data_array(scanNumber) % &
+         int_param_2 == 4) then
+       !! space_charge_redux
+       dispersion_parameters % space_charge_redux(tmpSection, disp_freq_ind) &
+            = origDisp
+    end if
+    
+    call compute_dispersion_arrays
+    call derived_ckt_qtys(R_matrix, L_matrix, G_matrix, C_matrix,&
+         pC_matrix)
+  end subroutine reset_dispersion
+  
+  !*******  initialization, normalization, unnormalization routines  *********!
+  !*** initialize latte vector ***!
+  subroutine init_latte_vector(y)
+    complex(dp), dimension(:), intent(inout) :: y
+    integer :: i, j
+
+    !initialize y vector first to zeros
+    do i = 1, n_eqns
+       y(i) = (0.0,0.0)
+    end do
+
+    !initialize circuit voltage
+    j = 1
+    do i = 1, M !!loop on frequencies, pick out drives and assign voltage
+       if (fl(i) == frequency_parameters % frequency_integer(j)) then
+          !positive frequency
+          y(i) = sqrt(frequency_parameters % power_input(j) * K(0.0d0,i)/2.0) &
+               * exp(smo * frequency_parameters % phase_input(j))
+          j = j + 1
+       end if
+    end do
+
+    !initialize circuit current
+    !!loop on ckt frequencies
+    do i = first_ckt_index, last_ckt_index
+       y(i+M) = -y(i)/K(0.0d0,i)
+    end do
+    
+    !initialize disk velocities
+    do i = 3*M + 1, 3*M + N_disks
+       y(i) = cmplx(derived_qtys % u0)
+    end do
+ 
+    !initialize disk phases
+    j = 0
+    do i = 3*M + N_disks + 1, 3*M + 2*N_disks
+       !y(i) = cmplx((2.0*pi)*j/N_disks)
+       y(i) = -cmplx((2.0*pi)*j/N_disks) !! from 0 to 2pi-\delta
+       !y(i) = -cmplx((2.0*pi)*j/(N_disks-1)) !! DON'T USE!! doesn't avg to 0
+       j = j + 1
+    end do
+  end subroutine init_latte_vector
+
+  !*** normalize latte vector ***!
+  subroutine norm_latte_vector(y)
+    complex(dp), dimension(:), intent(inout) :: y
+    integer i,j
+
+    !normalize voltage
+    do i = 1, M !!loop on frequencies, pick out drives and assign voltage
+       !positive frequency
+       if (i >= first_ckt_index .and. i <= last_ckt_index) then
+  	  y(i) = y(i) * pC(0.0d0,i)/(K(0.0d0,i)*beam_parameters % current)
+       end if
+    end do
+    
+    !normalize circuit current
+    do i = 1, M !!loop on frequencies
+       if (i >= first_ckt_index .and. i <= last_ckt_index) then
+	  y(i+M) = y(i+M) * pC(0.0d0,i)/ beam_parameters % current
+       end if
+    end do
+
+    !assuming normalize always called with no space charge field?
+
+    !normalize disk velocities
+    do i = 3*M + 1, 3*M + N_disks
+       y(i) = y(i)/derived_qtys % u0
+    end do
+ 
+    !normalize disk phases
+    do i = 3*M + N_disks + 1, 3*M + 2*N_disks
+       y(i) = y(i)/w0
+    end do
+  end subroutine norm_latte_vector
+
+  !*** unnormalize latte vector ***!
+  subroutine unnorm_latte_vector(y)
+    complex(dp), dimension(:), intent(inout) :: y
+    integer i,j
+
+    !unnormalize voltage
+    do i = 1, M !!loop on frequencies, pick out drives and assign voltage
+       !positive frequency
+       if (i >= first_ckt_index .and. i <= last_ckt_index) then
+	  y(i) = y(i) * K(0.0d0,i)*beam_parameters % current / pC(0.0d0,i)
+       end if
+    end do
+    
+    !unnormalize circuit current
+    do i = 1, M !!loop on frequencies
+       if (i >= first_ckt_index .and. i <= last_ckt_index) then
+          y(i+M) = y(i+M) * beam_parameters % current / pC(0.0d0,i)
+       end if
+    end do
+
+    !unnormalize space charge field
+    do i = 1, M !!loop on frequencies
+       if (i >= first_spch_index .and. i <= last_spch_index) then
+	  y(i+2*M) = y(i+2*M) * circuit_parameters % circuit_length &
+               * derived_qtys % rho0 / eps0
+       end if
+    end do
+
+    !unnormalize disk velocities
+    do i = 3*M + 1, 3*M + N_disks
+       y(i) = y(i) * derived_qtys % u0
+    end do
+    
+    !unnormalize disk phases
+    do i = 3*M + N_disks + 1, 3*M + 2*N_disks
+       y(i) = y(i) * w0
+    end do
+  end subroutine unnorm_latte_vector
+
+  !*** initialize muse vector ***!
+  subroutine init_muse_vector(y)
+    complex(dp), dimension(:), intent(inout) :: y
+    integer i, j
+
+    !initialize y vector first to zeros
+    do i = 1, n_eqns
+       y(i) = (0.0,0.0)
+    end do
+
+    !! DC quantities come at end, i.e. M+1
+    !initialize circuit voltage
+    j = 1
+    do i = 1, M !!loop on frequencies, pick out drives and assign voltage
+       if (fl(i) == frequency_parameters % frequency_integer(j)) then
+          y(i) = sqrt(frequency_parameters % power_input(j) * K(0.0d0,i)/2.0) &
+               * exp(smo * frequency_parameters % phase_input(j))
+          j = j + 1
+       end if
+    end do
+
+    !initialize circuit current
+    !!loop on ckt frequencies
+    do i = first_ckt_index, first_ckt_index + num_ckt_freqs - 1
+       y(i+M+1) = -y(i)/K(0.0d0,i)
+    end do
+
+    !! set the DC values of v and rho to u0, rho0
+    y(4*(M+1)) = derived_qtys % u0
+    y(5*(M+1)) = derived_qtys % rho0
+
+  end subroutine init_muse_vector
+
+  !*** normalize muse vector ***!
+  subroutine norm_muse_vector(y)
+    complex(dp), dimension(:), intent(inout) :: y
+    integer i,j
+
+    !normalize voltage
+    do i = 1, M !!loop on frequencies, pick out drives and assign voltage
+       !positive frequency
+       if (i >= first_ckt_index &
+            .and. i <= first_ckt_index + num_ckt_freqs - 1) then
+  	  y(i) = y(i) * pC(0.0d0,i)/(K(0.0d0,i)*beam_parameters % current)
+       end if
+    end do
+    
+    !normalize circuit current
+    do i = 1, M !!loop on frequencies
+       if (i >= first_ckt_index &
+            .and. i <= first_ckt_index + num_ckt_freqs - 1) then
+	  y(i+M+1) = y(i+M+1) * pC(0.0d0,i)/ beam_parameters % current
+       end if
+    end do
+
+    !assuming normalize always called with no space charge field?
+
+    !! set the DC values of v and rho to u0, rho0
+    y(4*(M+1)) = y(4*(M+1))/derived_qtys % u0
+    y(5*(M+1)) = y(5*(M+1))/derived_qtys % rho0
+  end subroutine norm_muse_vector
+
+  !*** unnormalize muse vector ***!
+  subroutine unnorm_muse_vector(y)
+    complex(dp), dimension(:), intent(inout) :: y
+    integer i,j
+
+    !unnormalize voltage
+    do i = 1, M !!loop on frequencies, pick out drives and assign voltage
+       !positive frequency
+       if (i >= first_ckt_index &
+            .and. i <= first_ckt_index + num_ckt_freqs - 1) then
+	  y(i) = y(i) * K(0.0d0,i)*beam_parameters % current / pC(0.0d0,i)
+       end if
+    end do
+    
+    !unnormalize circuit current
+    do i = 1, M !!loop on frequencies
+       if (i >= first_ckt_index &
+            .and. i <= first_ckt_index + num_ckt_freqs - 1) then
+          y(i+M+1) = y(i+M+1) * beam_parameters % current / pC(0.0d0,i)
+       end if
+    end do
+
+    !unnormalize space charge field
+    do i = 1, M !!loop on frequencies
+       if (i >= first_spch_index &
+            .and. i <= first_spch_index + num_spch_freqs - 1) then
+	  y(i+2*(M+1)) = y(i+2*(M+1)) * circuit_parameters % circuit_length &
+               * derived_qtys % rho0 / eps0
+       end if
+    end do
+
+    !unnormalize velocity
+    do i = 1, M !!loop on frequencies
+       y(i+3*(M+1)) = y(i+3*(M+1)) * derived_qtys % u0
+    end do
+    !! dc portion
+    y(4*(M+1)) = y(4*(M+1)) * derived_qtys % u0
+
+    !unnormalize density
+    do i = 1, M !!loop on frequencies
+       y(i+4*(M+1)) = y(i+4*(M+1)) * derived_qtys % rho0
+    end do
+    !! dc portion
+    y(5*(M+1)) = y(5*(M+1)) * derived_qtys % rho0
+  end subroutine unnorm_muse_vector
+
+
+  !*******************  integrator control routines  *******************!
+  subroutine shooting_method(pass_number)
+    implicit none
+    integer, intent(in) :: pass_number
+
+    print*, 'compute_reflections not implemented, ignoring ...'
+    !! just call the singlepass routine from here
+    !call singlepass
+    call singlepass(pass_number)
+  end subroutine shooting_method
+
+  subroutine singlepass(pass_number)
+    implicit none
+    integer, intent(in) :: pass_number
+
+    external runge_kutta, & !runge kutta integrator
+         !F, & !compute right hand side of ODE system
+         JACOBN, & !compute jacobian matrix
+         FA, & !compute A in A(y,t)*dy/dt = F(y,t)
+         G, & !root finder, see cdriv3.f
+         USERS !for special linear algebra routines
+    
+    real(dp) z, & !indep var, 1st call = 0.0, returns z at which sol'n given
+         zout, &!point at which soln desired
+         eps, & !requested relative acc., set=numerical_parameters % tolerance
+         h, & !step size
+         hmin, & !minimum magnitude of step-size.
+         hmax !maximum magnitude of step-size.
+
+    !! local variables
+    integer i
+    real(dp) dz, delta, scale
+
+    !! values below are common to all routines
+    eps = numerical_parameters % tolerance
+
+    !! normalized length is 1.0, integrate up to this value
+    if (vs_z_plot) then
+       dz = 1.0 / (output_parameters % num_axial_points - 1)
+       !! compute delta, a small number to add to 1.0 for checking
+       !! in integration kernel. it is the difference between 1 and
+       !! adding dz, num_axial_points - 1 times. (not equal to
+       !! dz*[num_axial_points-1] !!)
+       z = 0.0
+       do i = 1, output_parameters % num_axial_points - 1
+          z = z + dz
+       end do
+       !delta = z - 1.0
+       delta = z - 0.99999
+    else !! if there are no *_vs_z plots make dz whole length, 1.0
+       dz = 1.0
+       delta = 0.1 !!delta has to be > 0.0 so < works in integration kernel
+    end if
+
+    !! set initial step size
+    h = 1.0 / numerical_parameters % num_grid_pts
+    z = 0.0
+    zout = dz
+
+    !! allocate vectors used in RK, move this to a subroutine
+    allocate(k_1(n_eqns))
+    allocate(k_2(n_eqns))
+    allocate(k_3(n_eqns))
+    allocate(k_4(n_eqns))
+    allocate(yk_1(n_eqns))
+    allocate(yk_2(n_eqns))
+    allocate(yk_3(n_eqns))
+    allocate(y_nminus1(n_eqns))
+    allocate(k_45(7,n_eqns))
+    c_45(1) = 0.0
+    c_45(2) = 1.0/5.0
+    c_45(3) = 3.0/10.0
+    c_45(4) = 7.0/10.0
+    c_45(5) = 5.0/6.0
+    c_45(6) = 1.0
+    c_45(7) = 1.0
+    b_45(1) = 59.0/630.0
+    b_45(2) = 0.0
+    b_45(3) = 125.0/288.0
+    b_45(4) = 125.0/504.0
+    b_45(5) = 27.0/160.0
+    b_45(6) = 1.0/18.0
+    b_45(7) = 0.0
+    bhat_45(1) = 59.0/630.0 + 4.0/225.0 * 0.1
+    bhat_45(2) = 0.0
+    bhat_45(3) = -5.0/72.0 * 0.1 + 125.0/288.0
+    bhat_45(4) = 5.0/18.0  * 0.1 + 125.0/504.0
+    bhat_45(5) = -63.0/200.0 * 0.1 + 27.0/160.0
+    bhat_45(6) = -41.0/45.0 * 0.1 + 1.0/18.0
+    bhat_45(7) = 0.1
+    a_45(2,1) = 1.0/5.0
+    a_45(3,1) = 3.0/40.0
+    a_45(4,1) = 203.0/360.0
+    a_45(5,1) = -8285.0/13608.0
+    a_45(6,1) = 136.0/315.0
+    a_45(7,1) = 59.0/630.0
+    a_45(3,2) = 9.0/40.0
+    a_45(4,2) = -49.0/24.0
+    a_45(5,2) = 1925.0/648.0
+    a_45(6,2) = -5.0/3.0
+    a_45(7,2) = 0.0
+    a_45(4,3) = 98.0/45.0
+    a_45(5,3) = -500.0/243.0
+    a_45(6,3) = 575.0/288.0
+    a_45(7,3) = 125.0/288.0
+    a_45(5,4) = 100.0/189.0
+    a_45(6,4) = -15.0/56.0
+    a_45(7,4) = 125.0/504.0
+    a_45(6,5) = 81.0/160.0
+    a_45(7,5) = 27.0/160.0
+    a_45(7,6) = 1.0/18.0
+    allocate(netE(M))
+    allocate(rhol(M))
+    allocate(exp_sum_real(M))
+    allocate(exp_sum_imag(M))
+    allocate(exp_real(M,N_disks))
+    allocate(exp_imag(M,N_disks))
+    allocate(thesis_V(2*(2*M+1),2*(2*M+1)))
+    allocate(thesis_w(2*(2*M+1)))
+    allocate(ipiv(2*(2*M+1)))
+
+    !! put the input vector into the plot_cube
+    plot_cube(pass_number,1,:) = y
+
+    i = 2
+    !! integration kernel
+    do while (i <= output_parameters % num_axial_points &
+         .and. zout <= 1.0 + delta)
+       if (run_three) then
+          if (units_structure % length_cm) then
+             scale = 100.0
+          else
+             scale = 1.0
+          end if
+          print*, 'in integration kernel. calling runge_kutta() at z = ', &
+               zout * circuit_parameters % circuit_length * scale
+       end if
+       call runge_kutta(n_eqns,z,h,y,zout,eps,hmin,hmax)
+
+       !! put the vector into the plot cube. if .not. vs_z_plot, then i
+       !! never goes past 2
+       plot_cube(pass_number,i,:) = y
+
+       zout = zout + dz !advance the output point
+       i = i + 1 !advance i
+    end do
+
+    !! release working vectors, move this to a subroutine
+    deallocate(k_1)
+    deallocate(k_2)
+    deallocate(k_3)
+    deallocate(k_4)
+    deallocate(yk_1)
+    deallocate(yk_2)
+    deallocate(yk_3)
+    deallocate(y_nminus1)
+    deallocate(k_45)
+    deallocate(netE)
+    deallocate(rhol)
+    deallocate(exp_sum_real)
+    deallocate(exp_sum_imag)
+    deallocate(exp_real)
+    deallocate(exp_imag)
+    deallocate(thesis_V)
+    deallocate(thesis_w)
+    deallocate(ipiv)
+
+  end subroutine singlepass
+  
+end subroutine commonTWT

@@ -1,0 +1,189 @@
+!**************************************************************************!
+scan_data.nml:	namelist file for code lmsuite, used for entering scan data
+!**************************************************************************!
+Notes:
+- The number of scans desired should be set in the file lmsuite.nml
+(number_scans in namelist &run). This is the number of &scan namelists
+that should appear in this file. A &scan namelist starts with "&scan"
+and ends with "&end". There are presently twelve entries in a scan namelist.
+- The type of scan is specified by a scanID integer. A legend follows
+describing the different scanIDs. Sample &scan namelists describing
+the parameters are also found below.
+- if two_parameter is set to true then a "two parameter scan" is selected.
+the second scan type and parameters are declared in the &scan namelist
+immediately following the &scan namelist in which two_parameter = true.
+one should have two_parameter = false in the second of the two namelists
+comprising the two parameter scan. not all scans support this feature, see
+the User's Manual for more details. NOTE: TWO_PARAMETER IS NOT IMPLEMENTED
+FOR ANY OF THE SCANS YET.
+- the int_param_1,2,3 and real_param_1,2 are integers and real numbers
+respectively and serve scan dependent roles as described in the legend.
+these parameters are not always used, and in this case one can set their
+values to 0 or 0.0 for readability.
+- logic_param_1 is used in some scans to set a flag.
+- to use an example namelist below, remove ! from first column.
+!**************************************************************************!
+scanID:		scan function:
+1		input power scan
+2		input phase scan
+3		frequency scan
+4		dispersion parameter scan
+5		beam parameter scan
+!**************************************************************************!
+
+
+!**************************************************************************!
+&scan
+	scanID = 1		!input power scan
+	two_parameter = false	!set two parameter scan with following &scan
+	min = -30.0		!minimum input power in watts/dBm, depending
+!				!on input_power_dBm (see namelist units)
+	max = 0.0		!maximum input power in watts/dBm, depending
+!				!on input_power_dBm (see namelist units)
+	num_points = 35		!number of points to scan, translates to number
+!				!of "single pass runs" needed.
+	distribute_log = true	!true = separates scan values between min and
+!				!max logarithmically
+	int_param_1 = 1538	!frequency_integer at which to scan
+	int_param_2 = 0		!not used
+	int_param_3 = 0		!not used
+	real_param_1 = 0.0	!input phase at frequency being scanned in
+!				!degrees/radian
+	real_param_2 = 0.0	!not used
+	logic_param_1 = true	!true = in output data files give data for all
+!				!frequencies, false = only give data for
+!				!int_param_1 frequency.
+&end
+!**************************************************************************!
+
+
+!**************************************************************************!
+!&scan
+	scanID = 2		!input phase scan
+	two_parameter = false	!set two parameter scan with following &scan
+	min = -179.9		!minimum input phase in degrees/radians,
+!				!depending on phase_degrees (namelist units)
+	max = 179.9		!maximum input phase in degrees/radians,
+!				!depending on phase_degrees (namelist units)
+!				!keep -180 < min,max < 180 so output data OK
+	num_points = 10		!number of points to scan, translates to number
+!				!of "single pass runs" needed.
+	distribute_log = false	!inactive for this scanID
+	int_param_1 = 1538	!frequency_integer at which to scan
+	int_param_2 = 0		!not used
+	int_param_3 = 0		!not used
+	real_param_1 = -10.0	!input power at frequency being scanned in
+!				!dBm/watts
+	real_param_2 = 0.0	!not used
+	logic_param_1 = true	!true = in output data files give data for all
+!				!frequencies, false = only give data for
+!				!int_param_1 frequency.
+!&end
+!**************************************************************************!
+
+
+! the frequency to scan is specified by its location in the
+! frequency_integer array (int_param_1). min and max are the minimum and
+! maximum values the frequency_integer entry in location int_param_1 will
+! take. the input power and phase will be that entered into the power_input
+! and phase_input arrays in the namelist &frequency_list. the min and max
+! values must maintain the ascending order of the frequency_integer array,
+! i.e., the min frequency must be strictly greater than the preceding
+! frequency_integer and the max frequency must be strictly less than the
+! following frequency_integer. min and max frequencies should be in the
+! range from min_ckt_freq to max_ckt_freq.
+!
+! WINDOWS USERS BEWARE: For some reason I cannot reproduce in windows results
+! I got on linux using the frequency scan. I think I might have some
+! precision issues that need to be resolved.
+!
+! HINT: look for convergence on num_points. if you see something unexpected
+! in a *_vs_freq plot, run that frequency as a single input. note that when
+! you run as a single frequency, you are likely NOT using the same number of
+! disks that are being used during a scan. there are often wierd resonances
+! between certain frequencies and certain numbers of disks. you might need
+! to increase base_number_disks to be quite high (since the number of disks
+! are computed based on the frequencies in lmsuite.nml, not accounting for
+! the scanned frequencies) to avoid such resonances. also, make sure that
+! max_space_charge_freq is high enough such that all scans have the same
+! number of space charge harmonics.
+!**************************************************************************!
+&scan
+	scanID = 3		!scan frequency
+	two_parameter = false	!set two parameter scan with following &scan
+	min = 1300		!minimum frequency_integer
+	max = 2300		!maximum frequency_integer
+	num_points = 100	!number of points to scan, translates to number
+!				!of "single pass runs" needed.
+	distribute_log = false	!not implemented for this scanID
+	int_param_1 = 1		!integer _position_ in frequency_integer array
+!				!of frequency to scan	
+	int_param_2 = 2		!integer _position_ in fl() array of frequency
+!				!to plot, only if logic_param_1 = true
+	int_param_3 = 0		!not used
+	real_param_1 = 1.0	!not used
+	real_param_2 = 0.0	!not used
+	logic_param_1 = false	!false = plot output power, gain, and phase at
+!				!frequency being scanned.
+!				!true = plot output power, gain, and phase at
+!				!frequency indexed [in fl()] by int_param_2.
+&end
+!**************************************************************************!
+
+
+!Dispersion scanning only works when dispersion data are entered
+!manually, i.e. use_sheath_model = false, use_tape_model = false for phase
+!velocity and interaction impedance, use_antonsen_formula = false for
+!space charge reduction factor, use_loss_model = false for losses.
+!The frequency being scanned must be one of the integers
+!at which the relevant dispersion data is defined, i.e. a disp_freq_integer
+!or a loss_freq_integer. Furthermore, if there is more than one frequency
+!in the simulation, the additional frequencies too should be
+!disp_freq_integers or loss_freq_integers so that dispersion properties at
+!those frequencies are not changed via the interpolation of parameters
+!between frequencies. Lastly, make sure that the frequency at which you are
+!scanning is a frequency in the simulation as specified in lmsuite.nml.
+!**************************************************************************!
+!&scan
+	scanID = 4		!scan dispersion parameter
+	two_parameter = false	!set two parameter scan with following &scan
+	min = 1.0		!minimum value of dispersion parameter
+	max = 100.0		!maximum value of dispersion parameter
+	num_points = 4		!number of points to scan, translates to number
+!				!of "single pass runs" needed.
+	distribute_log = false	!inactive for this scanID
+	int_param_1 = 3000	!frequency_integer at which to scan
+	int_param_2 = 2		!integer id selecting dispersion parameter to
+!				!scan. 1=phase velocity, 2=impedance,
+!				!3=loss, 4=space_charge_redux
+	int_param_3 = 1		!section number: if int_param_2 = 1,2,4 then
+!				!use circuit sections, else loss locations.
+	real_param_1 = 0.0	!not used
+	real_param_2 = 0.0	!not used
+	logic_param_1 = false	!not used
+!&end
+!**************************************************************************!
+
+
+! scanID = 5 NOT IMPLEMENTED !
+
+!**************************************************************************!
+!&scan
+	scanID = 5		!scan beam parameter; param identified below
+	two_parameter = false	!set two parameter scan with following &scan
+	min = 1.0		!minimum value of beam parameter
+	max = 10.0		!maximum value of beam parameter
+	num_points = 10		!number of points to scan, translates to number
+!				!of "single pass runs" needed.
+	distribute_log = false	!true = separates scan values between min and
+!				!max logarithmically
+	int_param_1 = 2		!integer id selecting beam parameter to scan.
+!				!1=voltage, 2=current,
+!				!3=outer_radius, 4=inner_radius
+	int_param_2 = 0		!not used
+	int_param_3 = 0		!not used
+	real_param_1 = 0.0	!not used
+	real_param_2 = 0.0	!not used
+	logic_param_1 = false	!true = maintain constant beam perveance
+!&end
+!**************************************************************************!

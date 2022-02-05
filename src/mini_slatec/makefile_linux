@@ -1,0 +1,37 @@
+# specify the object files
+OBJS =	dbesi0.o \
+	dbsi0e.o \
+	dbesi1.o \
+	dbsi1e.o \
+	dbesk0.o \
+	dbsk0e.o \
+	dbesk1.o \
+	dbsk1e.o \
+	dcsevl.o \
+	d1mach.o \
+	fdump.o \
+	initds.o \
+	i1mach.o \
+	j4save.o \
+	xercnt.o \
+	xerhlt.o \
+	xermsg.o \
+	xerprn.o \
+	xersve.o \
+	xgetua.o
+
+#implicit rule to tell how to make object files from *.f (f77) files
+%.o : %.f
+	$(F77) -c $(FFLAGS_LIBS) $*.f
+
+# make the library file
+libmini_slatec_s : $(OBJS)
+	ar -r libmini_slatec_s.a *.o;
+	ranlib libmini_slatec_s.a
+
+# to clean up this library
+.PHONY : clean realclean
+clean :
+	-rm $(OBJS) $(CLEANUP)
+realclean : clean
+	-rm *.a

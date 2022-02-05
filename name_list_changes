@@ -1,0 +1,17 @@
+&run
+add after num_scan_namelists:
+	num_movie_namelists = 0
+
+&output_data
+add after echo_output:
+	clean_outputs = true
+add after phase_out_vs_power_in:
+	phase_out_vs_phase_in = true (or false)
+remove after phase_space:
+	num_ps_plots = 1
+	first_last_time = 0.0 20.0e-9
+
+&dispersion
+add after space_charge_redux:
+	intrplt_sections = true (or false)
+	interpol_sects_list = 2 (list of integers, see lmsuite.nml for details)

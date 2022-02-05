@@ -1,0 +1,876 @@
+!*************************************************************************!
+lmsuite.nml:	namelist file for code lmsuite
+!*************************************************************************!
+general notes:
+- everything in this file outside of
+	&namelist
+		param1 = true		!! comments allowed here
+		param2 = 123.456	!! comments allowed here
+	&end
+is not read by code. therefore, you can comment this file arbitrarily
+outside of the namelists. within namelists comments
+can be added if they start with ! and either: a) appear on the same line
+as a namelist variable FOLLOWING the namelist variable or b) appear on
+their own line within the namelist.
+- if lmsuite.nml is not in directory, code will run a default
+TWT with single tone input computing the second harmonic
+- correct order of namelists IS REQUIRED:
+	user_interface, units, run, output_data, frequency_list, circuit,
+	dispersion, losses, beam, numerical_data
+- all variables in every namelist are required
+- for logical inputs can use true, .true., false, .false.
+- "qty" integers (e.g. used for selecting which quantity to print) use the
+following legend:
+	1=circuit voltage, 2=circuit current, 3=space charge field,
+	4 =beam velocity, 5=beam charge density, 6=beam current
+!*************************************************************************!
+
+
+!*************************************************************************!
+!*************************************************************************!
+!*************************************************************************!
+namelist user_interface
+- echo_user_interface:
+		true = print this namelist to screen
+- echo_namelists:
+		true = 	write namelists to screen. each of the namelists has
+		its own "echo_namelist" parameter to control whether the
+		particular namelist is shown.
+		false = don't print ANY of the namelists to the screen,
+		even if their "echo_namelist" parameter is true.
+- echo_initialization:
+		true =	write initialization information to the screen
+		including computed frequencies, dispersion arrays,
+		derived quantities (DC beam velocity, DC charge density,
+		DC current), etc.
+- echo_runtime_one:
+		true = report high level numerical progress to the screen
+- echo_runtime_two:
+		true = report medium level numerical progress to the screen
+- echo_runtime_three:
+		true = report low level numerical progress to the screen
+- with_pauses:	true = 	pause between chunks of output written to screen
+		false = do not pause between output chunks. even if
+		echo_* = false there are some pauses, therefore if
+		the code is to run non-stop this should be set to false.
+!*************************************************************************!
+&user_interface
+	echo_user_interface = true
+	echo_namelists = true
+	echo_initialization = true
+	echo_runtime_one = true
+	echo_runtime_two = true
+	echo_runtime_three = true
+	with_pauses = true
+&end
+!*************************************************************************!
+!*************************************************************************!
+!*************************************************************************!
+
+
+
+!*************************************************************************!
+!*************************************************************************!
+!*************************************************************************!
+namelist units
+- echo_units:	true = print this namelist to the screen
+- input_power_dBm:
+		true = all input powers are assumed to be in dBm, else watts
+- output_power_dBm:	
+		true = all output powers will be written in dBm, else watts
+- phase_degrees:
+		true = all input and output angles will be treated as degrees,
+		else radians
+- length_cm:	true = all input and output lengths will be treated as
+		centimeters, else meters. all speeds will be treated as cm/s,
+		else, m/s
+- nepers:	true = loss information is in nepers, else dB. circuit loss
+		is entered in (nepers/dB)/(m/cm) based on this parameter and
+		the value of length_cm
+!*************************************************************************!
+&units
+	echo_units = true
+	input_power_dBm = true
+	output_power_dBm = true
+	phase_degrees = true
+	length_cm = true
+	nepers = false
+&end
+!*************************************************************************!
+!*************************************************************************!
+!*************************************************************************!
+
+
+
+!*************************************************************************!
+!*************************************************************************!
+!*************************************************************************!
+namelist run
+(if all run options in this namelist are false, just get single pass of code)
+- echo_run: 	true = print this namelist to screen
+- select_code: (need ' ' marks!)
+		'L' = 	LATTE
+		'M' = 	MUSE
+		'S' = 	S-MUSE
+		'LM' =	LATTE and MUSE
+		'LS' =	LATTE and S-MUSE
+		'MS' = 	MUSE and S-MUSE
+		'LMS' = LATTE, MUSE, and S-MUSE
+- compute_reflections:
+		true = code takes transmission line input and output
+		impedances specified in namelist circuit and uses a "shooting
+		method" to iteratively solve the boundary value problem
+		to account for reflections.
+- svea:		true = uses approximate model with "slowly varying envelope
+		approximation." For large severs (e.g. with total loss greater
+		than forward gain) one should set this equal to true and
+		compute_reflections = false. Since the SVEA models don't
+		have a backward wave reflections do not have to be computed.
+- dc_constant:
+		true = 	for LATTE or MUSE sets derivatives of DC quantities
+		to zero. has no effect on S-MUSE. use false for default.
+- num_scan_namelists:
+		integer number of scan namelists appearing in scan_data.nml.
+		scans are required to generate power_out_vs_power_in,
+		power_out_vs_phase_in, phase_out_vs_power_in, gain_vs_freq.
+		see file scan_data.nml for description of how scan data is
+		entered. enter 0 for no scans (single pass mode). For a
+		two parameter scan must add 2 to num_scan_namelists, 1 for
+		each of the namelists.
+- num_movie_namelists:
+		integer number of movie namelists appearing in movies.nml.
+		using the movie namelists produces a series of data files,
+		where each file represents a "frame" of an animation. presently
+		post-processing is required (e.g. Matlab) to create a movie
+		from the generated data files. see the file movies.nml for
+		more details. if num_movie_namelists = 0 no frame data is
+		generated. only works if num_scan_namelists = 0.
+!*************************************************************************!
+&run
+	echo_run = true
+	select_code = 'L'
+	compute_reflections = false	! not implemented
+	svea = true			! implemented in LATTE only
+	dc_constant = false
+	num_scan_namelists = 0		! not all scans implemented,
+!					! see scan_data.nml for more detail
+	num_movie_namelists = 2
+&end
+!*************************************************************************!
+!*************************************************************************!
+!*************************************************************************!
+
+
+
+!*************************************************************************!
+!*************************************************************************!
+!*************************************************************************!
+namelist output_data
+- echo_output:	true = print this namelist to screen
+- clean_outputs:
+		true = remove all files in the ./outputs directory. does not
+		remove user created subdirectories of ./outputs
+		false = do not delete files, overwrite existing files.
+- file_headers: true = put data description and column labels in plot files
+- plot_dispersion:
+		true = generate files for plotting dispersion parameters
+		and loss as a function of z. use to check if inputs match
+		expected profiles.
+- power_out_vs_power_in:
+		true = generate data for power out/power in curve (AM/AM).
+		must have a scan of input power specified.
+- gain_vs_power_in:
+		true = generate data for gain/power in curve. in dB if
+		output_power_dBm = true. must have a scan of input power
+		specified.
+- power_out_vs_phase_in:
+		true = generate data for power out/phase in curve.
+		must have a scan of input phase specified.
+- phase_out_vs_power_in:
+		true = generate data for phase out/power in curve (AM/PM).
+		must have an input power scan specified.
+- phase_out_vs_phase_in:
+		true = generate data for phase out/phase in curve.
+		must have an input phase scan specified.
+- power_out_vs_freq:
+		true = plot power at output (dBm/watts) versus frequency.
+		must have a frequency scan specified.
+- gain_vs_freq:	true = plot gain at output (dB) versus frequency.
+		must have a frequency scan specified.
+- phase_vs_freq:
+		true = plot phase delay at output (degrees/radians) versus
+		frequency. must have a frequency scan specified.
+- num_axial_points:
+		for *_vs_z plots, number of axial points in output data.
+- circuit_power_vs_z:
+		true = plot circuit power versus axial distance
+- magnitude_vs_z:
+		true = plot magnitude of the state variable specified by
+		mvz_qty as a function of axial distance for all frequencies.
+		If output_power_dBm = true (units namelist) then data is
+		log10(magnitude).
+- mvz_qty:	integer selecting quantity for magnitude plot, see top of
+		file for "qty" legend
+- phase_vs_z:	true = plot phase of the state variable specified by
+		pvz_qty as a function of axial distance for all frequencies
+- pvz_qty: 	integer selecting quantity for phase plot, see top of file
+		for "qty" legend
+- phase_differences_vs_z:
+		true = plot phase difference of state variables specified by
+		pd_qty_1 and pd_qty_2 as a function of axial distance for
+		all frequencies
+- pd_qty_1:	integer selecting first state variable for phase difference
+		plot
+- pd_qty_2:	integer selecting second state variable for phase difference
+		plot
+- hot_phase_velocity_vs_z:
+		true = plot the hot wave phase velocity versus axial position
+		for each frequency
+- disk_orbits_vs_z:
+		true = plot disk phase orbits as a function of axial position
+		(LATTE only)
+- conserved_quantity_vs_z:
+		true = plot conserved quantity and components as a function
+		of axial position
+- beam_energy_vs_z:
+		true = plot spectral components of beam energy as a function
+		of axial position
+- dc_beam_vel_vs_z:
+		true = plot average beam velocity as a function of axial
+		position
+- phase_space:	true = produce particle phase space plot (LATTE only). The
+		number of "wavelengths of particles" one gets is related to
+		the frequency integer. Increase the frequency integer (decrease
+		the base frequency) to get more wavelengths.
+!*************************************************************************!
+&output_data
+	echo_output = true
+	clean_outputs = true
+	file_headers = true
+	plot_dispersion = true		
+	power_out_vs_power_in = true
+	gain_vs_power_in = true
+	power_out_vs_phase_in = false
+	phase_out_vs_power_in = true
+	phase_out_vs_phase_in = false
+	power_out_vs_freq = false
+	gain_vs_freq = true			! not implemented
+	phase_vs_freq = false
+	num_axial_points = 500
+	circuit_power_vs_z = true
+	magnitude_vs_z = false
+	mvz_qty = 5
+	phase_vs_z = false
+	pvz_qty = 1
+	phase_differences_vs_z = false
+	pd_qty_1 = 1
+	pd_qty_2 = 5
+	hot_phase_velocity_vs_z = false
+	disk_orbits_vs_z = false		! not implemented
+	conserved_quantity_vs_z = false		! not implemented
+	beam_energy_vs_z = false		! not implemented
+	dc_beam_vel_vs_z = false
+	phase_space = false
+&end
+!*************************************************************************!
+!*************************************************************************!
+!*************************************************************************!
+
+
+!*************************************************************************!
+!*************************************************************************!
+!*************************************************************************!
+namelist frequency_list
+- echo_frequencies:
+		true = print this namelist to screen
+- num_input_freqs:
+		number of frequencies appearing in this namelist. all
+		frequencies are considered "drive frequencies."
+		Harmonic and intermodulation frequencies are computed by the
+		code. To specify all simulation frequencies in this namelist
+		(i.e. don't let code generate any frequencies), set
+		highest_order_IMP = 1.
+- base_frequency:
+		frequency of which all frequencies in simulation are integer
+		multiple of (Hz) (real number)
+- read_from_file:
+		true = 	get frequency_integer, power_input, and phase_input
+		from file named "frequencies.in". This file should contain
+		number_frequencies rows, where each row has the structure:
+		frequency_integer, power_input, phase_input. data can be
+		separated by spaces or commas. no comments are allowed in this
+		file.
+- frequency_integer:
+		space or comma separated list of number_frequencies integers in
+		ascending order including all input frequencies for simulation.
+		the integers should be such that when one multiplies them
+		by base_frequency they get the desired frequencies in Hz.
+		if read_from_file is true, see description for
+		read_from_file for how frequency_integer is specified in
+		"frequencies.in".
+- power_input:	space or comma separated list of number_frequencies powers
+		corresponding to frequencies in frequency_integer.
+		if read_from_file is true, see description for
+		read_from_file for how power_input is specified in
+		"frequencies.in".
+- phase_input:	space or comma separated list of number_frequencies phases
+		corresponding to frequencies in frequency_integer. if
+		read_from_file is true, see description for read_from_file
+		for how phase_input is specified in "frequencies.in".
+- highest_order_IMP:
+		The code computes all intermodulation frequencies up to this
+		order. Only frequencies below max_space_charge_freq and above
+		min_space_charge_frequency are used in computations.
+		To specify all simulation frequencies in this namelist
+		(i.e. don't let code generate any frequencies), set
+		highest_order_IMP = 1.
+- min_ckt_freq: minimum frequency that "exists" on the circuit. for all
+		frequencies f with min_ckt_freq <= f <= max_ckt_freq
+		phase_velocity and impedance dispersion data must be provided
+		unless use_sheath_model=true or use_tape_model=true, and loss
+		data must be provided unless use_loss_model=true. for
+		these frequencies circuit voltage and circuit current
+		evolution will be computed.
+- max_ckt_freq: maximum frequency that "exists" on the circuit. for all
+		frequencies f with min_ckt_freq <= f <= max_ckt_freq
+		phase_velocity and impedance dispersion data must be provided
+		unless use_sheath_model=true or use_tape_model=true, and loss
+		data must be provided unless use_loss_model=true. for
+		these frequencies circuit voltage and circuit current
+		evolution will be computed.
+- min_space_charge_freq:
+		the minimum frequency that "exists" in the beam,
+		min_space_charge_freq <= min_ckt_freq. for frequencies
+		between min_space_charge_freq and min_ckt_freq evolution
+		equations for the beam are computed, but these beam frequencies
+		are assumed not to feedback onto the circuit, i.e. circuit
+		quantities are zero and have zero spatial derivative for
+		these frequencies. space_charge_redux data must be supplied
+		for frequencies in the range
+		min_space_charge_freq <= f <= max_space_charge_freq
+		unless use_antonsen_formula=true.
+- max_space_charge_freq:
+		the maximum frequency that "exists" in the beam,
+		max_space_charge_freq >= max_ckt_freq. for frequencies
+		between max_ckt_freq and max_space_charge_freq evolution
+		equations for the beam are computed, but these beam frequencies
+		are assumed not to feedback onto the circuit, i.e. circuit
+		quantities are zero and have zero spatial derivative for
+		these frequencies. max_ckt_freq, max_space_charge_freq,
+		and highest_order_IMP may be used to effectively implement
+		Christine 1-D's "nsc" or number of beam space charge harmonics.
+		space_charge_redux data must be supplied for frequencies in
+		the range min_space_charge_freq <= f <= max_space_charge_freq
+		unless use_antonsen_formula=true.
+!*************************************************************************!
+&frequency_list
+	echo_frequencies = true
+	num_input_freqs = 1
+	base_frequency = 1.0e6
+	read_from_file = false 		! change to true to run 1750 MHz
+	frequency_integer = 1538
+	power_input = -5.0
+	phase_input = 0.0
+	highest_order_IMP = 2
+	min_ckt_freq = 1300
+	max_ckt_freq = 3600
+	min_space_charge_freq = 1300
+	max_space_charge_freq = 4600
+&end
+!*************************************************************************!
+!*************************************************************************!
+!*************************************************************************!
+
+
+
+!*************************************************************************!
+!*************************************************************************!
+!*************************************************************************!
+namelist circuit
+- echo_circuit: true = print this namelist to screen
+- circuit_length:
+		length of total TWT circuit
+- number_ckt_sections:
+		integer number of TWT sections
+- read_from_file:
+		true = read the TWT section information from file named
+		"circuit.in". The file should contain number_ckt_sections rows,
+		where each row has the structure:
+		ckt_section_location, tape_width, helix_radius, helix_pitch,
+		vane_radius, wall_radius. data can be separated by spaces or
+		commas. no comments are allowed in this file.
+- ckt_section_location:
+		space or comma separated list of number_ckt_locations in
+		ascending order with the locations of the circuit changes.
+		the first entry should always be 0.0. if read_from_file is
+		true, see description for read_from_file for how
+		ckt_section_location is specified in "circuit.in".
+- tape_width:	space or comma separated list of number_ckt_locations with
+		helix tape widths corresponding to ckt_section_location. if
+		read_from_file is true, see description for read_from_file
+		for how tape_width is specified in "circuit.in".
+- helix_radius:	space or comma separated list of number_ckt_locations with
+		helix radii corresponding to ckt_section_location. if
+		read_from_file is true, see description for read_from_file
+		for how helix_radius is specified in "circuit.in".
+- helix_pitch:	space or comma separated list of number_ckt_locations with
+		helix pitches corresponding to ckt_section_location. if
+		read_from_file is true, see description for read_from_file
+		for how helix_pitch is specified in "circuit.in".
+- vane_radius: 	space or comma separated list of number_ckt_locations with vane
+		radii corresponding to ckt_section_location. if
+		read_from_file is true, see description for read_from_file
+		for how vane_radius is specified in "circuit.in".
+- wall_radius: 	space or comma separated list of number_ckt_locations with wall
+		radii corresponding to ckt_section_location. if
+		read_from_file is true, see description for read_from_file
+		for how wall_radius is specified in "circuit.in".
+- input_TL_impedance:
+		when compute_reflections (see namelist run) is true, this is
+		the transmission line impedance on the TWT input.
+- output_TL_impedance:
+		when compute_reflections (see namelist run) is true, this is
+		the transmission line impedance on the TWT output.
+!*************************************************************************!
+&circuit
+	echo_circuit = true
+ 	circuit_length = 42.0
+        number_ckt_sections = 10
+        read_from_file = true
+        ckt_section_location = 0.0
+        tape_width = 0.0	! helix models not implemented, info not used
+        helix_radius = 0.0	! used for computing sp. ch. red. fact.
+        helix_pitch = 0.0	! helix models not implemented, info not used
+        vane_radius = 0.0	! helix models not implemented, info not used
+        wall_radius = 0.0	! helix models not implemented, info not used
+        input_TL_impedance = 50.0	! not used
+        output_TL_impedance = 50.0	! not used
+&end
+!*************************************************************************!
+!*************************************************************************!
+!*************************************************************************!
+
+
+
+!*************************************************************************!
+!*************************************************************************!
+!*************************************************************************!
+namelist dispersion
+- echo_dispersion:
+		true = print this namelist to screen
+- vph_over_c:	true = assumes phase velocity data is entered as fraction
+		of speed of light
+		false = assumes phase velocity data is cm/s if length_cm
+		(see units namelist) is true, otherwise m/s
+- num_dispersion_freqs:
+		number of frequencies at which dispersion data is
+		specified.
+- read_from_file:
+		true = read dispersion_freq_integer, phase_velocity,
+		impedance, space_charge_redux from file "dispersion.in".
+		the file should have
+		(number_ckt_sections * num_dispersion_freqs)
+		rows with the following structure:
+
+		(section_1)
+		f_1, vph_1, K_1, R_1
+		f_2, vph_2, K_2, R_2
+		...
+		f_M, vph_M, K_M, R_M
+		(section_2)
+		f_1, vph_1, K_1, R_1
+		f_2, vph_2, K_2, R_2
+		...
+		f_M, vph_M, K_M, R_M
+		...
+		...
+		(section_N)
+		f_1, vph_1, K_1, R_1
+		f_2, vph_2, K_2, R_2
+		...
+		f_M, vph_M, K_M, R_M
+		
+		in the above list f_x is dispersion_freq_integer, vph_x is
+		phase_velocity, K_x is impedance, \alpha_x is loss, and R_x is
+		space_charge_redux. the (section_y) does not indicate data
+		to be entered, rather it indicates how the data is to be
+		grouped. the elements of dispersion_freq_integer do not
+		need to be the same as those in frequency_integer of namelist
+		frequency_list. see dispersion_freq_integer for more detail.
+		no comments are allowed in the file dispersion.in.
+- dispersion_freq_integer:
+		space or comma separated list of
+		(number_ckt_sections * num_dispersion_freqs) elements with
+		the structure:
+
+		(section_1) f_1, f_2, ... , f_M, (section_2) f_1,
+		f_2, ... , f_M, ... (section_N) f_1, f_2, ... , f_M
+
+		In the above list only the f_x data are entered, the
+		(section_y) only indicates how the data is grouped.
+		It is assumed that f_1 < f_2 < ... < f_M.
+		These are frequency integers which correspond to the
+		phase_velocity, impedance, and space_charge_redux data
+		that follows. They do not have to correspond to the integers
+		in frequency_integer in namelist frequency_list. If frequencies
+		in dispersion_freq_integer are different than those
+		in frequency_integer, dispersion values for frequencies in
+		frequency_integer will be obtained by linearly interpolating
+		the dispersion parameters of the nearest frequencies
+		in dispersion_frequency_integer. If a frequency_integer is such
+		that it is smaller than the smallest of the
+		dispersion_freq_integer, or larger than the largest of the
+		dispersion_freq_integer, an error message is reported.
+		Of course, the elements of dispersion_freq_integer can be
+		identical to those of frequency_integer. One
+		may specify different frequencies for the different TWT
+		sections, although the number of frequencies for each section
+		must be the same. Note that if space_charge_redux values are
+		manually specified (use_antonsen_formula = false) then the
+		range of disp_freq_integer has to span from
+		min_space_charge_freq to max_space_charge_freq and so
+		space_charge_redux values may be computed for all space charge
+		frequencies (phase_velocity and impedance values can be set to
+		zero for frequencies outside of the range min_ckt_freq to
+		max_ckt_freq). If use_antonsen_formula = true, then the range
+		of disp_freq_integer just has to span min_ckt_freq to
+		max_ckt_freq. if read_from_file is true, see read_from_file
+		description for how dispersion_freq_integer data is entered.
+- phase_velocity:
+		space or comma separated list of
+		(number_ckt_sections * num_dispersion_freqs) elements
+		corresponding to the frequencies in dispersion_freq_integer
+		with the structure:
+
+		(section_1) vph_1, vph_2, ... , vph_M, (section_2) vph_1,
+		vph_2, ... , vph_M, ... (section_N) vph_1, vph_2, ... , vph_M
+
+		In the above list only the vph_x data are entered, the
+		(section_y) only indicates how the data is grouped.
+		if read_from_file is true, see read_from_file description
+		for how phase_velocity data is entered.
+- impedance:	space or comma separated list of
+		(number_ckt_sections * num_dispersion_freqs) elements
+		corresponding to the frequencies in dispersion_freq_integer
+		with the structure:
+
+		(section_1) K_1, K_2, ... , K_M, (section_2) K_1,
+		K_2, ... , K_M, ... (section_N) K_1, K_2, ... , K_M
+
+		In the above list only the K_x data are entered.
+		(section_y) only indicates how the data is grouped.
+		if read_from_file is true, see read_from_file description
+		for how impedance data is entered.
+- space_charge_redux:
+		space or comma separated list of
+		(number_ckt_sections * num_dispersion_freqs) elements
+		corresponding to the frequencies in dispersion_freq_integer
+		with the structure:
+
+		(section_1) R_1, R_2, ... , R_M, (section_2) R_1,
+		R_2, ... , R_M, ... (section_N) R_1, R_2, ... , R_M
+
+		In the above list only the R_x data are entered.
+		(section_y) only indicates how the data is grouped.
+		if read_from_file is true, see read_from_file description
+		for how space_charge_redux data is entered.
+- intrplt_sections:
+		true = linearly interpolate changes in phase_velocity,
+		impdedance, and space_charge_redux over circuit sections
+		listed in interpol_sects_list (below). Dispersion parameters
+		are interpolated between the final values in the preceeding
+		section and the values specified for the section. Therefore,
+		interpolation is not allowed in the first section since there
+		is no "preceeding section" to the first section. However,
+		by making the first section very short and including "2" in
+		interpol_sects_list one can effectively have an interpolation
+		in the "first" section.
+- interpol_sects_list:
+		comma or space separated list of integers of the sections to
+		interpolate. The maximum number of integers read is
+		number_ckt_sections - 1 (&circuit namelist) since
+		"1" is not allowed (see intrplt_sections above).
+- intrplt_over_length:
+		true = linearly interpolate changes in phase_velocity,
+		impdedance, and space_charge_redux over length interpol_length.
+		false = parameters change discontinuously at section
+		locations. If both intrplt_sections and intrplt_over_length
+		are false, parameters change discontinuously at
+		ckt_section_location points (&circuit namelist). If both
+		intrplt_sections and intrplt_over_length are true,
+		intrplt_over_length is default.
+- interpol_length:
+		length in m/cm depending on length_cm (see units namelist)
+		over which dispersion parameters will be linearly interpolated
+		between their specified sectional values if intrplt_over_length
+		is true.
+- use_sheath_model:
+		true = disregard circuit dispersion data and compute it from
+		sheath model using data entered in namelist circuit.
+		if use_antonsen_formula is false still need to provide
+		space_charge_redux.
+- use_tape_model:
+		true = disregard circuit dispersion data and compute it from
+		tape model using data entered in namelist circuit. if
+		use_antonsen_formula is false still need to provide
+		space_charge_redux. use_tape_model takes precedence over
+		use_sheath_model.
+- use_antonsen_formula:
+		true = disregard space_charge_redux data and compute space
+		charge reduction factor using formula from christine 1-d
+		paper (see general notes at top for reference).
+- use_correction:
+		true = 	use correction to space charge reduction factor as
+		explained in christine 1-d paper.
+- use_beta_c:	true = 	use beta_circuit for beta in antonsen formula.
+		false = use beta_e-beam for beta in antonsen formula.
+!*************************************************************************!
+&dispersion
+	echo_dispersion = true
+	vph_over_c = true
+	num_dispersion_freqs = 12
+	read_from_file = true
+	dispersion_freq_integer = 0
+	phase_velocity = 0.0
+	impedance = 0.0
+	space_charge_redux = 0.0
+	intrplt_sections = true
+	interpol_sects_list = 6
+	intrplt_over_length = false
+	interpol_length = 3.0
+	use_sheath_model = false
+	use_tape_model = false		! not implemented
+	use_antonsen_formula = true
+	use_correction = false		! not implemented
+	use_beta_c = false
+&end
+!*************************************************************************!
+!*************************************************************************!
+!*************************************************************************!
+
+
+
+!*************************************************************************!
+!*************************************************************************!
+!*************************************************************************!
+namelist losses
+- echo_losses: 	true = print this namelist to screen
+- number_loss_locations:
+		integer number of points where loss is specified
+- number_loss_freqs:
+		integer number of frequencies at which loss will be specified
+		for each loss_location
+- read_from_file:
+		true = read loss data from file losses.in.
+		The first row of the file has number_loss_locations real
+		numbers specifying the loss locations in m/cm.
+		The remainder of the file has
+		number_loss_sections * number_loss_freqs rows with the
+		following structure
+
+		(loss_location_1)
+		f_1, \alpha
+		f_2, \alpha
+		...
+		f_M, \alpha
+		(loss_location_2)
+		f_1, \alpha
+		f_2, \alpha
+		...
+		f_M, \alpha
+		...
+		...
+		(loss_location_N)
+		f_1, \alpha
+		f_2, \alpha
+		...
+		f_M, \alpha
+
+		in the above list f_x is loss_freq_integer and \alpha_x
+		is the loss at loss_location_y for freq_integer f_x.
+		the (loss_location_y) does not indicate data
+		to be entered, rather it indicates how the data is to be
+		grouped. the elements of loss_freq_integer do not
+		need to be the same as those in frequency_integer of namelist
+		frequency_list. see loss_freq_integer for more detail.
+		no comments are allowed in the file losses.in.
+- loss_location:
+		space or comma separated list of number_loss_sections real
+		numbers specifying the locations in m/cm where loss is
+		specified. the first loss_location must be 0.0, and
+		if inrplt_btwn_points = true the last entry must be greater
+		than or equal to circuit_length. if read_from_file is true,
+		see read_from_file description for how loss_freq_integer data
+		is entered.
+
+- loss_freq_integer:
+		space or comma separated list of
+		(number_loss_sections * number_loss_freqs) elements with
+		the structure:
+
+		(loss_location_1) f_1, f_2, ... , f_M, (loss_location_2) f_1,
+		f_2, ... , f_M, ... (loss_location_N) f_1, f_2, ... , f_M
+
+		In the above list only the f_x data are entered, the
+		(loss_location_y) only indicates how the data is grouped.
+		It is assumed that f_1 < f_2 < ... < f_M.
+		These are frequency integers which correspond to the
+		loss data that follows. They do not have to correspond
+		to the integers in frequency_integer in namelist
+		frequency_list. If frequencies in loss_freq_integer are
+		different than those in frequency_integer, loss values for
+		frequencies in frequency_integer will be obtained by
+		linearly interpolating the loss parameters of the nearest
+		frequencies in loss_frequency_integer. If a frequency_integer
+		is such that it is smaller than the smallest of the
+		loss_freq_integer, or larger than the largest of the
+		loss_freq_integer, an error message is reported.
+		Of course, the elements of loss_freq_integer can be
+		identical to those of frequency_integer. One
+		may specify different frequencies for the different TWT
+		sections, although the number of frequencies for each section
+		must be the same. if read_from_file is true, see read_from_file
+		description for how loss_freq_integer data is entered.
+- loss:		space or comma separated list of
+		(number_loss_sections * number_loss_freqs) elements with
+		the structure:
+
+		(loss_location_1) alpha_1, alpha_2, ... , alpha_M,
+		(loss_location_2) alpha_1, alpha_2, ... , alpha_M,
+		 ... (loss_location_N) alpha_1, alpha_2, ... , alpha_M
+
+		In the above list only the alpha_x data are entered, the
+		(section_y) only indicates how the data is grouped. the
+		alpha_x are loss in (Np/dB)/(m/cm) corresponding
+		to the frequencies in loss_freq_integer. if read_from_file
+		is true, see read_from_file description for how loss
+		data is entered.
+- intrplt_btwn_points:
+		true = linearly interpolate loss between location
+		specifications. To enter a uniform section of loss with
+		this interpolation setting one must specify both endpoints
+		of the section and make them have the same value of loss.
+		For this interpolation setting the final loss_location
+		must be greater than or equal to the circuit length.
+- intrplt_over_length:
+		true = linearly interpolate changes in loss over length
+		interpol_length. With this method the loss is assumed
+		uniform for z greater than the corresponding loss_location
+		and z less than the next loss_location. Interpolation between
+		sections is done over interpol_length. This option reduces
+		the number of locations that need to be specified, but
+		may not be desired depending on how the physical TWT's loss
+		is specified. If both intrplt_btwn_points and
+		intrplt_over_length are false, parameters change
+		discontinuously at loss_location points. if both
+		intrplt_btwn_points and intrplt_over_length are true,
+		intrplt_over_length is default.
+- interpol_length:
+		length in m/cm depending on length_cm (see units namelist)
+		over which dispersion parameters will be linearly interpolated
+		between their specified sectional values if intrplt_over_length
+		is true.
+- use_loss_model:
+		true = use a numerical model to compute the frequency
+		dependence loss. when implemented will need to spec a few
+		more parameters. also will need units Np/m vs. dB/cm, etc.
+!*************************************************************************!
+&losses
+	echo_losses = true
+	number_loss_locations = 8
+	number_loss_freqs = 2
+	read_from_file = false		!see file losses.in for same info
+	loss_location = 0.0 7.0 12.0 12.5 20.0 24.0 30.0 42.0
+ 	loss_freq_integer = 1250 3700 1250 3700 1250 3700 1250 3700 1250 3700 1250 3700 1250 3700 1250 3700
+	loss = 0.2 0.2 0.2 0.2 1.0 1.0 30.0 30.0 30.0 30.0 1.0 1.0 0.2 0.2 0.2 0.2
+	intrplt_btwn_points = true
+    	intrplt_over_length = false
+	interpol_length = 0.5
+	use_loss_model = false		! not implemented
+&end
+!*************************************************************************!
+!*************************************************************************!
+!*************************************************************************!
+
+
+
+!*************************************************************************!
+!*************************************************************************!
+!*************************************************************************!
+namelist beam
+- echo_beam: 	true = print this namelist to screen
+- relativistic: true = compute relativistic beam velocity
+- DC_depression:
+		true = compute DC space charge depression to subtract from
+		beam voltage
+- voltage: 	beam voltage in (V).
+- current: 	beam current in (A).
+- outer_radius:	beam outer radius in (m/cm)
+- inner_radius:	beam inner radius in (m/cm)
+- specify_velocity:
+		true = take beam velocity to be given by beam_velocity
+		rather than computed from voltage
+- beam_velocity:
+		if specify_velocity = true, use this number for beam velocity.
+		units are either m/s or cm/s depending on length_cm (see
+		units namelist)
+!*************************************************************************!
+&beam
+	echo_beam = true
+	relativistic = false		!not implemented
+	DC_depression = false		!not implemented
+	voltage = 3100
+	current = 0.0655
+	outer_radius = 0.09652
+	inner_radius = 0.0
+	specify_velocity = false	!not implemented
+	beam_velocity = 1.0e9		!not implemented
+&end
+!*************************************************************************!
+!*************************************************************************!
+!*************************************************************************!
+
+
+
+!*************************************************************************!
+!*************************************************************************!
+!*************************************************************************!
+namelist numerical_data
+- echo_numerical:
+		true = print this namelist to screen
+- num_grid_pts:	if adaptive_step = false (fixed step ODE solver) then this
+		is equal to number of steps ODE solver takes. if
+		adaptive_step = true then the initial step size is
+		circuit_length/num_grid_pts. this is also the grid used for
+		setting discrete values of circuit dispersion and loss in
+		regions where these parameters are changing.
+		(for fixed step, should be >~ 300, depending on problem)
+- base_number_disks:
+		a minimum number of disks in LATTE used in computing total
+		number of disks. should be a prime number.
+- fnt0:		a factor used in computing final number of disks ala
+		christine 1-d. Formula for number of disks is
+		N_disks = fnt0 * number_frequencies * number_harmonics
+		* base_number_disks
+		number_harmonics is estimated by
+		max_space_charge_freq / (smallest drive frequency)
+- adaptive_step:
+		true = use adaptive step size. step size determined
+		automatically by tolerance. first step is circuit_length/
+		num_grid_pts
+		false = fixed step size.
+- tolerance:	sets tolerance for ODE solver. for single precision should
+		be greater than 1.0e-6. the larger the faster, but less
+		accurate. a nice trade-off seems to be 1.0e-3
+!*************************************************************************!
+&numerical_data
+	echo_numerical = true
+	num_grid_pts = 1000
+	base_number_disks = 107
+	fnt0 = 1.5
+	adaptive_step = false		! not implemented
+	tolerance = 1.0e-3		! not implemented
+&end
+!*************************************************************************!
+!*************************************************************************!
+!*************************************************************************!
