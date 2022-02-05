@@ -193,7 +193,7 @@ contains
     !true if "outer loop" of two parameter scan, or just single parameter scan
     logical, intent(in) :: outer_scan
     integer, intent(inout) :: time_called
-    
+
     !! local variables
     logical :: outer_of_two
     integer :: i, j, freq_ind, input_index, offset
@@ -308,7 +308,7 @@ contains
     !! save power and phase values read from frequency namelist to restore
     origPower = frequency_parameters % power_input(input_index)
     origPhase = frequency_parameters % phase_input(input_index)
-    
+
     !!offset is used to pass a value to the integration routine, so that
     !!data is loaded into the proper position of plot_cube
     offset = (time_called - 1) &
@@ -380,19 +380,19 @@ contains
     frequency_parameters % phase_input(input_index) = origPhase
 
     !!make plots if outer scan, or if single parameter scan
-    if (outer_of_two .or. outer_scan) then    
+    if (outer_of_two .or. outer_scan) then
        !! make the vs_power_in plots
        if (vs_powin_plot) then
           call vs_power_in_plots(plot_cube, scanNumber, freq_ind, outer_of_two)
        end if
-    
+
        !!make the versus z plots
        !!don't know what this makes when outer_of_two!!!!!!?!?!?!?!
        !!for now, don't allow it to be called
        if (vs_z_plot .and. .not. outer_of_two) then
           call vs_z_plots(plot_cube, scanNumber)
        end if
-       
+
        !! deallocate the plot_cube
        deallocate(plot_cube)
     end if
@@ -403,7 +403,7 @@ contains
     integer, intent(in) :: scanNumber !use this integer in file name
     !true if "outer loop" of two parameter scan, or just single parameter scan
     logical, intent(in) :: outer_scan
-    
+
     !! local variables
     logical :: outer_of_two
     integer :: i, j, freq_ind, input_index
@@ -682,7 +682,7 @@ contains
        !! recompute dispersion
        call compute_dispersion_arrays
        call derived_ckt_qtys(R_matrix, L_matrix, G_matrix, C_matrix, pC_matrix)
-       
+
        !! compute the initial vector and normalize it
        if (modelID == 'L') then
           call init_latte_vector(y)
@@ -723,7 +723,7 @@ contains
     integer, intent(in) :: scanNumber !use this integer in file name
     !true if "outer loop" of two parameter scan, or just single parameter scan
     logical, intent(in) :: outer_scan
-    integer, intent(inout) :: time_called
+    integer, intent(in) :: time_called
     !! local variables
     logical :: outer_of_two
     integer :: i, j, disp_freq_ind, tmpSection, offset
@@ -993,7 +993,7 @@ contains
     if (outer_of_two .or. outer_scan) then
        !! make the plots
        call vs_z_plots(plot_cube, scanNumber)
-       
+
        !! deallocate the plot_cube
        deallocate(plot_cube)
     end if
@@ -1013,7 +1013,7 @@ contains
 
     complex(dp), dimension(:,:,:), intent(in) :: plot_cube
     integer, intent(in) :: scanNumber
-  
+
     !local variables
     logical :: dispersion_scan_flag = .false.
     character(len=40) :: filename
@@ -1023,7 +1023,7 @@ contains
          tmpdthetadz
     complex(dp), dimension(:), allocatable :: tmpY, tmpmodY, tmpCmplx1, &
          tmpCmplx2
-    complex(dp) :: phase_factor, rhol, ibeaml, tmpQty1, tmpQty2    
+    complex(dp) :: phase_factor, rhol, ibeaml, tmpQty1, tmpQty2
 
     if (run_two) then !!tell the user which *_vs_z plots generated
        if (output_parameters % circuit_power_vs_z) then
@@ -1205,13 +1205,13 @@ contains
 
           !!start the column headings
           write(1, fmt="(A15)", advance='no') 'distance'
-          
+
           !! tmpNumPoints is the number of points in the outer loop
           if (scanNumber == 0) then
              tmpNumPoints = 1
           else
              tmpNumPoints = &
-                  run_parameters % scan_data_array(scanNumber) % num_points 
+                  run_parameters % scan_data_array(scanNumber) % num_points
           end if
 
           do i = 1, tmpNumPoints
@@ -1263,7 +1263,7 @@ contains
              tmpNumPoints = 1
           else
              tmpNumPoints = &
-                  run_parameters % scan_data_array(scanNumber) % num_points 
+                  run_parameters % scan_data_array(scanNumber) % num_points
           end if
 
           do i = 1, tmpNumPoints
@@ -1329,7 +1329,7 @@ contains
              tmpNumPoints = 1
           else
              tmpNumPoints = &
-                  run_parameters % scan_data_array(scanNumber) % num_points 
+                  run_parameters % scan_data_array(scanNumber) % num_points
           end if
 
           do i = 1, tmpNumPoints
@@ -1399,11 +1399,11 @@ contains
              tmpNumPoints = 1
           else
              tmpNumPoints = &
-                  run_parameters % scan_data_array(scanNumber) % num_points 
+                  run_parameters % scan_data_array(scanNumber) % num_points
           end if
 
           do i = 1, tmpNumPoints
-             do j = 1 , M 
+             do j = 1 , M
                 !! one of the pd_qtys is a circuit parameter, only do ckt_freqs
                 if (output_parameters % pd_qty_1 == 1 &
                      .or. output_parameters % pd_qty_1 == 2 &
@@ -1468,7 +1468,7 @@ contains
              tmpNumPoints = 1
           else
              tmpNumPoints = &
-                  run_parameters % scan_data_array(scanNumber) % num_points 
+                  run_parameters % scan_data_array(scanNumber) % num_points
           end if
 
           do i = 1, tmpNumPoints
@@ -1509,13 +1509,13 @@ contains
 
           !!start the column headings
           write(11, fmt="(A15)", advance='no') 'distance'
-          
+
           !! tmpNumPoints is the number of points in the outer loop
           if (scanNumber == 0) then
              tmpNumPoints = 1
           else
              tmpNumPoints = &
-                  run_parameters % scan_data_array(scanNumber) % num_points 
+                  run_parameters % scan_data_array(scanNumber) % num_points
           end if
 
           do i = 1, tmpNumPoints
@@ -1556,7 +1556,7 @@ contains
        tmpNumPoints = 1
     else
        tmpNumPoints = &
-            run_parameters % scan_data_array(scanNumber) % num_points 
+            run_parameters % scan_data_array(scanNumber) % num_points
     end if
 
     !! outer loop. makes one row per axial point
@@ -1583,7 +1583,7 @@ contains
        end if
 
        !!second loop. loops on first index of plot_cube, or num_point of scan
-       do ii = 1, tmpNumPoints 
+       do ii = 1, tmpNumPoints
 	  !! if a dispersion scan, recompute the dispersion
 	  if (dispersion_scan_flag) then
 	    call recompute_dispersion(scanNumber, ii, origDisp)
@@ -1606,14 +1606,14 @@ contains
              tmpCmplx1 = plot_cube(ii,i-1,:)
              tmpCmplx2 = plot_cube(ii,i+1,:)
           end if
-          
+
           !! unnormalize the vector
           if (modelID=='L') then
              call unnorm_latte_vector(tmpY)
           else
              call unnorm_muse_vector(tmpY)
           end if
-          
+
           !! compute and write the data for file 1
           if (output_parameters % circuit_power_vs_z) then
              !!loop over frequencies
@@ -1631,7 +1631,7 @@ contains
                    tmpPower = - (tmpY(j)*conjg(tmpY(j+M+1)) &
                         + conjg(tmpY(j))*tmpY(j+M+1))
                 end if
-                
+
                 !convert tmpPower to dBm
                 if (units_structure % output_power_dBm) then
                    if (tmpPower <= 0.0) then
@@ -1655,14 +1655,14 @@ contains
                   .or. output_parameters % mvz_qty == 2) then
                 !!loop over frequencies
                 do j = first_ckt_index, last_ckt_index
-                   if (modelID=='L') then 
+                   if (modelID=='L') then
                       tmpMag = abs(tmpY(j+(output_parameters % mvz_qty-1)*M))
                    else !! MUSE, S-MUSE
                       tmpMag = &
                            abs(tmpY(j+(output_parameters % mvz_qty-1)*(M+1)))
                    end if
-                   
-                   !if output_power_dBm then give log 
+
+                   !if output_power_dBm then give log
                    if (units_structure % output_power_dBm) then
                       if (tmpMag /= 0.0) then
                          tmpMag = log10(tmpMag)
@@ -1754,8 +1754,8 @@ contains
                          tmpMag = abs(ibeaml)
                       end if
                    end if
-                   
-                   !if output_power_dBm then give log 
+
+                   !if output_power_dBm then give log
                    if (units_structure % output_power_dBm) then
                       if (tmpMag /= 0.0) then
                          tmpMag = log10(tmpMag)
@@ -1774,7 +1774,7 @@ contains
                 print*, &
                    'Phase information for velocity is not implemented in LATTE'
              end if
-             
+
              !! circuit voltage or circuit current
              if (output_parameters % pvz_qty == 1 .or. &
                   output_parameters % pvz_qty == 2) then
@@ -1785,7 +1785,7 @@ contains
                    phase_factor = &
                         exp(smo*fl(j)*frequency_parameters % base_frequency &
                         * 2.0 * pi * (-1.0/vph(z,j) + 1.0/derived_qtys % u0)*z)
-                   
+
                    if (modelID=='L') then
                       if (.not. run_parameters % svea) then
 
@@ -1810,7 +1810,7 @@ contains
                            *(M+1))), &
                            real(tmpY(j+(output_parameters % pvz_qty-1)*(M+1))))
                    end if
-                   
+
                    !convert radians to degrees
                    if (units_structure % phase_degrees) then
                       tmpPhase = 180.0 * tmpPhase / pi
@@ -1920,7 +1920,7 @@ contains
                          tmpPhase = atan2(aimag(ibeaml),real(ibeaml))
                       end if
                    end if
-                   
+
                    !convert radians to degrees
                    if (units_structure % phase_degrees) then
                       tmpPhase = 180.0 * tmpPhase / pi
@@ -2061,21 +2061,21 @@ contains
                          tmpQty2 = ibeaml
                       end if
                    end if
-                   
+
                    !! make sure no divide by 0
                    if (tmpQty2 == (0.0,0.0)) then
                       tmpQty2 = (1.0,1.0)
                    end if
-                   
+
                    tmpQty1 = tmpQty1/tmpQty2
                    tmpPhase = atan2(aimag(tmpQty1),real(tmpQty1))
-                   
+
                    !convert radians to degrees
                    if (units_structure % phase_degrees) then
                       tmpPhase = 180.0 * tmpPhase / pi
                    end if
                    write(4, fmt="(en15.5)", advance='no') tmpPhase
-                   
+
                 end do
              else !! diff between space charge field and beam charge density
                 !!loop over frequencies
@@ -2178,15 +2178,15 @@ contains
                          tmpQty2 = ibeaml
                       end if
                    end if
-                   
+
                    !! make sure no divide by 0
                    if (tmpQty2 == (0.0,0.0)) then
                       tmpQty2 = (1.0,1.0)
                    end if
-                   
+
                    tmpQty1 = tmpQty1/tmpQty2
                    tmpPhase = atan2(aimag(tmpQty1),real(tmpQty1))
-                   
+
                    !convert radians to degrees
                    if (units_structure % phase_degrees) then
                       tmpPhase = 180.0 * tmpPhase / pi
@@ -2229,7 +2229,7 @@ contains
 
           !! compute and write the data for file 11
           if (output_parameters % dc_beam_vel_vs_z) then
-             if (modelID=='L') then 
+             if (modelID=='L') then
                 !! first compute average
                 !print*, 'i=', i, 'of', output_parameters % num_axial_points
                 tmpdcvel = 0.0
@@ -2258,7 +2258,7 @@ contains
                 do j = 1, 2*N_disks
                    tmpmodY(3*M+j) = tmpY(3*M+j) - tmpdcvel + derived_qtys % u0
                 end do
-                
+
                 !! redo the averaging
                 tmpmoddcvel = 0.0
                 do j = 1, N_disks
@@ -2337,7 +2337,7 @@ contains
     close(4)
     close(7)
     close(11)
-    
+
     !! release tmpY
     deallocate(tmpY)
     deallocate(tmpCmplx1)
@@ -2455,10 +2455,10 @@ contains
              dPsi = real(tmpPsi(kk)) - real(tmpPsi(kk-1))
              z_part = ((dPsi/dz)*(z-dz) - real(tmpPsi(kk-1))) &
                   /(dPsi/dz - betae)
-             
+
              dv = real(tmpV(kk)) - real(tmpV(kk-1))
              v_part = (dv/dz)*(z_part - (z - dz)) + real(tmpV(kk-1))
-             
+
              if (units_structure % length_cm) then
                 z_part = z_part * 100.0
                 v_part = v_part * 100.0
@@ -2541,7 +2541,7 @@ contains
           tmpPower = - (tmpY(i)*conjg(tmpY(i+M+1)) &
                + conjg(tmpY(i))*tmpY(i+M+1))
        end if
-       
+
        !convert tmpPower to dBm
        if (units_structure % output_power_dBm) then
           if (tmpPower <= 0.0) then
@@ -2612,7 +2612,7 @@ contains
     do i = first_ckt_index, last_ckt_index
        !! voltage phase model independent
        tmpPhase = atan2(aimag(tmpY(i)),real(tmpY(i)))
-       
+
        !convert radians to degrees
        if (units_structure % phase_degrees) then
           tmpPhase = 180.0 * tmpPhase / pi
@@ -2964,7 +2964,7 @@ contains
 
                 !!compute the gain
                 gain = P_out/P_in
-                
+
                 if (P_out < 0.0) then
                    P_out = 1.0e-15
                 end if
@@ -3069,7 +3069,7 @@ contains
           pc_ctr = pc_ctr + 1
        end do
     end do
-    
+
     deallocate(tmpY0)
     deallocate(tmpYL)
 
@@ -3340,7 +3340,7 @@ contains
     close(1)
     close(2)
     close(3)
-    
+
   end subroutine frequency_scan_plots
 
   subroutine power_out_vs_phase_in(plot_cube, scanNumber, freq_ind)
@@ -3489,7 +3489,7 @@ contains
        end if
        write(1, fmt="(A1)")
     end do
-    
+
     close(1)
   end subroutine power_out_vs_phase_in
 
@@ -3629,7 +3629,7 @@ contains
        end if
        write(1, fmt="(A1)")
     end do
-    
+
     close(1)
   end subroutine phase_out_vs_phase_in
 
@@ -3640,10 +3640,10 @@ contains
     !! local variables
     integer :: i, disp_freq_ind, tmpSection
     real(dp) :: deltaDisp, Disp_min, Disp_max, tmpDisp
-    
+
     !! section where parameter is changed
     tmpSection = run_parameters % scan_data_array(scanNumber) % int_param_3
-    
+
     !! find the index of the frequency to be scanned
     disp_freq_ind = 0
     if (run_parameters % scan_data_array(scanNumber) % int_param_2 == 1 .or. &
@@ -3666,10 +3666,10 @@ contains
           end if
        end do
     end if
-    
+
     Disp_min = run_parameters % scan_data_array(scanNumber) % min
     Disp_max = run_parameters % scan_data_array(scanNumber) % max
-    
+
     if (run_parameters % scan_data_array(scanNumber) % int_param_2 == 1) then
        !! phase_velocity
        if (units_structure % length_cm) then
@@ -3696,9 +3696,9 @@ contains
 
     deltaDisp = (Disp_max - Disp_min) &
          /(run_parameters % scan_data_array(scanNumber) % num_points - 1)
-    
+
     tmpDisp = (value-1)*deltaDisp + Disp_min
-    
+
     !! save dispersion values read from dispersion matrices to restore
     if (run_parameters % scan_data_array(scanNumber) % int_param_2 == 1) then
        !! phase_velocity
@@ -3718,7 +3718,7 @@ contains
        origDisp = dispersion_parameters % space_charge_redux(tmpSection, &
             disp_freq_ind)
     end if
-    
+
     !! put the new data into the dispersion
     !! if add intrplt_btwn_points to dispersion, will have to add
     !! conditionals to int_param_1 == 1,2,4. see int_param_3.
@@ -3751,18 +3751,18 @@ contains
     call compute_dispersion_arrays
     call derived_ckt_qtys(R_matrix, L_matrix, G_matrix, C_matrix,&
          pC_matrix)
-    
+
   end subroutine recompute_dispersion
-  
+
   subroutine reset_dispersion(scanNumber, origDisp)
     integer, intent(in) :: scanNumber
     real(dp), intent(in) :: origDisp
     !! local variables
     integer :: i, disp_freq_ind, tmpSection
-    
+
     !! section where parameter is changed
     tmpSection = run_parameters % scan_data_array(scanNumber) % int_param_3
-    
+
     !! find the index of the frequency to be scanned
     disp_freq_ind = 0
     if (run_parameters % scan_data_array(scanNumber) % int_param_2 == 1 .or. &
@@ -3785,7 +3785,7 @@ contains
           end if
        end do
     end if
-    
+
     !! restore original dispersion values
     if (run_parameters % scan_data_array(scanNumber) % int_param_2 == 1) then
        !! phase_velocity
@@ -3810,12 +3810,12 @@ contains
        dispersion_parameters % space_charge_redux(tmpSection, disp_freq_ind) &
             = origDisp
     end if
-    
+
     call compute_dispersion_arrays
     call derived_ckt_qtys(R_matrix, L_matrix, G_matrix, C_matrix,&
          pC_matrix)
   end subroutine reset_dispersion
-  
+
   !*******  initialization, normalization, unnormalization routines  *********!
   !*** initialize latte vector ***!
   subroutine init_latte_vector(y)
@@ -3843,12 +3843,12 @@ contains
     do i = first_ckt_index, last_ckt_index
        y(i+M) = -y(i)/K(0.0d0,i)
     end do
-    
+
     !initialize disk velocities
     do i = 3*M + 1, 3*M + N_disks
        y(i) = cmplx(derived_qtys % u0)
     end do
- 
+
     !initialize disk phases
     j = 0
     do i = 3*M + N_disks + 1, 3*M + 2*N_disks
@@ -3871,7 +3871,7 @@ contains
   	  y(i) = y(i) * pC(0.0d0,i)/(K(0.0d0,i)*beam_parameters % current)
        end if
     end do
-    
+
     !normalize circuit current
     do i = 1, M !!loop on frequencies
        if (i >= first_ckt_index .and. i <= last_ckt_index) then
@@ -3885,7 +3885,7 @@ contains
     do i = 3*M + 1, 3*M + N_disks
        y(i) = y(i)/derived_qtys % u0
     end do
- 
+
     !normalize disk phases
     do i = 3*M + N_disks + 1, 3*M + 2*N_disks
        y(i) = y(i)/w0
@@ -3904,7 +3904,7 @@ contains
 	  y(i) = y(i) * K(0.0d0,i)*beam_parameters % current / pC(0.0d0,i)
        end if
     end do
-    
+
     !unnormalize circuit current
     do i = 1, M !!loop on frequencies
        if (i >= first_ckt_index .and. i <= last_ckt_index) then
@@ -3924,7 +3924,7 @@ contains
     do i = 3*M + 1, 3*M + N_disks
        y(i) = y(i) * derived_qtys % u0
     end do
-    
+
     !unnormalize disk phases
     do i = 3*M + N_disks + 1, 3*M + 2*N_disks
        y(i) = y(i) * w0
@@ -3977,7 +3977,7 @@ contains
   	  y(i) = y(i) * pC(0.0d0,i)/(K(0.0d0,i)*beam_parameters % current)
        end if
     end do
-    
+
     !normalize circuit current
     do i = 1, M !!loop on frequencies
        if (i >= first_ckt_index &
@@ -4006,7 +4006,7 @@ contains
 	  y(i) = y(i) * K(0.0d0,i)*beam_parameters % current / pC(0.0d0,i)
        end if
     end do
-    
+
     !unnormalize circuit current
     do i = 1, M !!loop on frequencies
        if (i >= first_ckt_index &
@@ -4061,7 +4061,7 @@ contains
          FA, & !compute A in A(y,t)*dy/dt = F(y,t)
          G, & !root finder, see cdriv3.f
          USERS !for special linear algebra routines
-    
+
     real(dp) z, & !indep var, 1st call = 0.0, returns z at which sol'n given
          zout, &!point at which soln desired
          eps, & !requested relative acc., set=numerical_parameters % tolerance
@@ -4208,5 +4208,5 @@ contains
     deallocate(ipiv)
 
   end subroutine singlepass
-  
+
 end subroutine commonTWT

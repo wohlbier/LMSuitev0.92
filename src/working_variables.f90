@@ -28,10 +28,10 @@ module working_variables
      real(dp) :: rho0
      real(dp) :: beam_area
   end type derived_qtys_S
-  
+
   !*** variable definitions ***!
   type (derived_qtys_S) derived_qtys
-  
+
   !normalized fundamental frequency
   real(dp) :: w0
   !number of disks
@@ -108,13 +108,13 @@ module working_variables
   integer :: first_spch_index !index of lowest space charge freq
   integer :: last_spch_index !index of highest space charge freq
   character :: modelID !flag used in F() to know which derivative to compute
-  
+
 
 contains
   !******************************************************************!
   !********************  initialization routines  *******************!
   !******************************************************************!
-  
+
   !*******************  compute derived quantities  *****************!
   subroutine compute_derived_qtys
     implicit none
@@ -139,14 +139,14 @@ contains
     !! dc charge density
     derived_qtys % rho0 = beam_parameters % current &
          / (derived_qtys % u0 * derived_qtys % beam_area)
-    
+
 
     !compute normalized fundamental frequency
     w0 = 2*pi*frequency_parameters % base_frequency &
          * circuit_parameters % circuit_length / derived_qtys % u0
     ! compute N_disks
-    ! formula is fnt0 * num_input_freqs * number_harmonics 
-    ! * base_number_disks 
+    ! formula is fnt0 * num_input_freqs * number_harmonics
+    ! * base_number_disks
     ! where number_harmonics is estimated by
     ! max_space_charge_freq / 1st drive frequency
     N_disks = numerical_parameters % fnt0 * num_spch_freqs &
@@ -162,7 +162,7 @@ contains
     if (tmpDisk == 0) then
        N_disks = N_disks - 1
     end if
-    
+
     if (interface_parameters % echo_initialization) then
        print*, 'Computing derived quantities:'
        print "(' w0 = ', f8.3, '  (normalized base frequency)')", w0
@@ -187,7 +187,7 @@ contains
        end if
     end if
   end subroutine compute_derived_qtys
-  
+
   !*******************  create frequency array fl  ******************!
   subroutine create_frequency_array(echo)
     implicit none
@@ -198,14 +198,14 @@ contains
     integer OA_size, tM_rows, tM_columns, HOI !!highest_order_IMP
     integer i,j,k
     character junk
-    
+
     if (interface_parameters % echo_initialization .and. echo) then
        print*, ''
        print*, 'Creating frequency array'
     end if
-    
+
     HOI = frequency_parameters % highest_order_IMP
-    
+
     !*** compute OmegaAlphas ***!
     ! allocate OmegaAlpha
     allocate(OmegaAlpha(HOI, -max_freqs:max_freqs))
@@ -215,17 +215,17 @@ contains
           OmegaAlpha(i,j) = 0
        end do
     end do
-    
+
     !fill in OmegaAlpha(1,:) with freq_integer
     do j = 1, frequency_parameters % num_input_freqs
        OmegaAlpha(1,j) = frequency_parameters % frequency_integer(j)
        OmegaAlpha(1,-j) = -frequency_parameters % frequency_integer(j)
     end do
-    
+
     ! OA_size keeps track of maximum number of nonzero
     ! frequencies in OmegaAlpha, including negative frequencies
     OA_size = 2 * frequency_parameters % num_input_freqs
-    
+
     !! compute the OmegaAlpha
     do i = 2, HOI
        !tM_rows is #rows in tmpMatrix. originally written for i-1, but
@@ -242,31 +242,31 @@ contains
        tmpMatrix = &
             reshape(source=(/(0, k = 1, tM_rows * tM_columns)/), &
             shape = (/tM_rows , tM_columns/))
-       
+
        do j = 1, tM_rows !! j loop fills tmpMatrix, with OmegaAlpha as source
           !really only need to go up to (i-1)/2 since j's above this are
           !repeats...but fix that later
           call outer_product(tmpMatrix,OmegaAlpha,i,j)
        end do
-       
+
        !flatten tmpMatrix into tmpArray
        allocate(tmpArray(1,tM_rows*tM_columns))
        tmpArray = reshape(source=tmpMatrix, shape=(/1, tM_rows*tM_columns/))
-       
+
        !! sort tmpArray.
        call sort_tmpArray(tmpArray, tM_rows * tM_columns)
-       
+
        !! make new OmegaAlpha from tmpArray
        call new_OmegaAlpha(tmpArray,tM_rows*tM_columns,OmegaAlpha,OA_size,i)
-       
+
        !! kill tmpMatrix and tmpArray
        deallocate(tmpMatrix)
        deallocate(tmpArray)
     end do !! end construction of OmegaAlpha
-    
+
     !*** make fl from OmegaAlpha ***!
     call make_fl(OmegaAlpha, M)
-    
+
     !*** count circuit frequencies and space charge freqs ***!
     call count_frequencies
 
@@ -275,7 +275,7 @@ contains
        print "(' A total of ', I3, ' frequencies (',I3,' positive) for', I3, ' drive frequencies')", &
             2*M+1, M, frequency_parameters % num_input_freqs
        print "(' with highest order IMP =', I3)", HOI
-       
+
        print*, ''
        print "(' List of frequencies including all IMPs up to order', I3,':')", HOI
        print*,(fl(i),i=-M,M)
@@ -310,7 +310,7 @@ contains
       integer, intent(in) :: i, j
       integer k, l, m, r, s, tmpFreq
       logical not_in
-      
+
       m = 1 !! m tracks index going into tmpArray
       do k = -max_freqs, max_freqs
          do l = -max_freqs, max_freqs
@@ -335,7 +335,7 @@ contains
          end do
       end do
     end subroutine outer_product
-    
+
     subroutine new_OmegaAlpha(tmpArray, N, OmegaAlpha, OA_size, i)
       integer, dimension(:,:), intent(in) :: tmpArray
       integer, intent(in) :: N
@@ -344,13 +344,13 @@ contains
       integer, intent(inout) :: OA_size
       integer, intent(in) :: i
       integer j, k
-      
+
       !! find location in tmpArray of first greater than zero entry
       k = 1
       do while (tmpArray(1,k) <= 0)
          k = k + 1
       end do
-      
+
       !! from k start putting elements of tmpArray into OmegaAlpha
       j = 1
       do while (k <= N)
@@ -365,20 +365,20 @@ contains
          k = k + 1
          j = j + 1
       end do
-      
+
       !set the new size of OA_size
       if (2*(j-1) > OA_size) then
          OA_size = 2*(j-1)
       end if
     end subroutine new_OmegaAlpha
-    
+
     subroutine make_fl(OmegaAlpha, M)
       integer, dimension(HOI,-max_freqs:max_freqs), intent(in) :: &
            OmegaAlpha
       integer, intent(inout) :: M
       integer i,j,k,l,tmpFreq
       logical not_in
-      
+
       !!flatten all of OmegaAlpha into tmpArray, don't use reshape b/c
       !!want to get rid of dupes
       allocate(tmpArray(1,HOI*(2*max_freqs+1)))
@@ -402,19 +402,19 @@ contains
          end do
       end do
       M = (k-1)/2 !! total number of positive frequencies, global variable!
-      
+
       !!sort tmp_Array
       call sort_tmpArray(tmpArray,HOI*(2*max_freqs+1))
-      
+
       !find first greater than zero entry
       k = 1
       do while (tmpArray(1,k) <= 0)
          k = k + 1
       end do
-      
+
       !allocate space for fl
       allocate(fl(-M:M))
-      
+
       do i = 0, M
          fl(i) = 0
          fl(-i) = 0
@@ -435,18 +435,18 @@ contains
          j = j + 1
       end do
     end subroutine make_fl
-    
-    
+
+
     !! bubble sort taken from Hahn, F90 for scientists and engineers
     subroutine sort_tmpArray(tmpArray, N)
       integer, dimension(:,:), intent(inout) :: tmpArray
       integer, intent(in) :: N
       integer :: tmp, j, k
       logical :: sorted
-      
+
       sorted = .false.
       k = 0
-      
+
       do while (.not. sorted)
          sorted = .true.
          k = k + 1
@@ -486,11 +486,10 @@ contains
     print*, ''
     print*, ''
     print*, ''
-    pause
 
     allocate(fl(-frequency_parameters % highest_order_IMP : &
          frequency_parameters % highest_order_IMP))
-    
+
     M = frequency_parameters % highest_order_IMP
 
     fl(0) = 0
@@ -508,7 +507,7 @@ contains
             2*M+1, M, frequency_parameters % num_input_freqs
        print "(' with highest order IMP =', I3)", &
             frequency_parameters % highest_order_IMP
-       
+
        print*, ''
        print "(' List of frequencies including all IMPs up to order', I3,':')",frequency_parameters % highest_order_IMP
        print*,(fl(i),i=-M,M)
@@ -537,7 +536,7 @@ contains
     integer i
     num_ckt_freqs = 0
     num_spch_freqs = 0
-      
+
     !! count the number of circuit and space charge frequencies
     !! and assign the first_ckt_index and first_spch_index
     do i = 1, M
@@ -556,7 +555,7 @@ contains
           end if
        end if
     end do
-    
+
     !! assign the last_ckt_index and last_spch_index
     last_ckt_index = first_ckt_index + num_ckt_freqs - 1
     last_spch_index = first_spch_index + num_spch_freqs - 1
@@ -611,11 +610,11 @@ contains
     end do
   end function find_freq
   !*******************  initialize plot arrays  *********************!
-  
+
   !****************  initialize dispersion arrays  ******************!
   subroutine initialize_dispersion_arrays
     character junk
-    
+
     !! allocate dispersion arrays of size
     !!(num_ckt_sections, num_input_freqss, num_grid_pts)
     !! second 0 index corresponds to z = 0.0
@@ -626,13 +625,13 @@ contains
     allocate(scrf_matrix(-M:M, 0:numerical_parameters % num_grid_pts))
     allocate(nscrf_matrix(-M:M, 0:numerical_parameters % num_grid_pts))
     allocate(Z_factor_matrix(-M:M, 0:numerical_parameters % num_grid_pts))
-    
+
     !! compute initial dispersion
     if (interface_parameters % echo_initialization) then
        print*, 'Computing vph, K, alpha, and scrf matrices'
     end if
     call compute_dispersion_arrays
-    
+
     !! plot dispersion if requested
     if (output_parameters % plot_dispersion) then
        if (interface_parameters % echo_initialization) then
@@ -640,20 +639,20 @@ contains
        end if
        call plot_dispersion_data
     end if
-    
+
     !! now get derived circuit quantities
     allocate(R_matrix(-M:M, 0:numerical_parameters % num_grid_pts))
     allocate(L_matrix(-M:M, 0:numerical_parameters % num_grid_pts))
     allocate(G_matrix(-M:M, 0:numerical_parameters % num_grid_pts))
     allocate(C_matrix(-M:M, 0:numerical_parameters % num_grid_pts))
     allocate(pC_matrix(-M:M, 0:numerical_parameters % num_grid_pts))
-    
+
     if (interface_parameters % echo_initialization) then
        print*, 'Computing derived circuit quantities R, L, G, C, and pierce C'
     end if
     call derived_ckt_qtys(R_matrix, L_matrix, G_matrix, C_matrix,&
          pC_matrix)
-    
+
 20  format (/)
 30  format(A)
     print 20
@@ -664,13 +663,13 @@ contains
   end subroutine initialize_dispersion_arrays
 
   !! initialize A matrix, S matrix, jacobian, frequency_pair matrix
-  
+
   !********************  dispersion routines  *******************!
   subroutine compute_dispersion_arrays
     real(dp) z_start, z_end, tmpz, tmpvph, tmpK, tmp_scrf, tmp_alpha
     integer arr_start, arr_end, i, j, k
-    
-    
+
+
     !***************** vph, K, R matrices ******************!
     !!set the zero frequency parameters to zero
     do k = 0, numerical_parameters % num_grid_pts
@@ -682,7 +681,7 @@ contains
        nscrf_matrix(0,k) = 0.0
        Z_factor_matrix(0,k) = 0.0
     end do
-    
+
     !! loop on circuit sections
     do i = 1, circuit_parameters % number_ckt_sections
        !! get length indexing
@@ -713,7 +712,7 @@ contains
        if (arr_end > numerical_parameters % num_grid_pts) then
           arr_end = numerical_parameters % num_grid_pts
        end if
-       
+
        do j = 1, M !! loop on all frequencies
           !! get the values of vph, K for this section and frequency
           if (dispersion_parameters % use_tape_model) then
@@ -745,14 +744,14 @@ contains
           else
              call data_helix(i,j,tmpvph,tmpK)
           end if
-          
+
           !! get value for R for this section and frequency
           if (dispersion_parameters % use_antonsen_formula) then
              call antonsen_formula(i,j,tmp_scrf, tmpvph)
           else
              call data_scrf(i,j,tmp_scrf)
           end if
-          
+
           !!fill in vph_matrix, K_matrix, scrf_matrix
           do k = arr_start, arr_end
              !!plus and minus frequencies
@@ -765,13 +764,13 @@ contains
           end do
        end do !! end loop on frequencies
     end do !! end loop on ckt sections
-    
+
     !! interpolate results
     if (dispersion_parameters % intrplt_sections .or. &
          dispersion_parameters % intrplt_over_length) then
        call interpolate_dispersion(vph_matrix, K_matrix, scrf_matrix)
     end if
-    
+
     !! fill in nvph_matrix, normalized phase velocity
     !! fill in nscrf_matrix. the purpose of this matrix is so that calls
     !! to nscrf() return normalized values without having to compute
@@ -802,10 +801,10 @@ contains
           end if
        end do
     end do
-    
+
     !***************** alpha matrix ******************!
-    
-    !! loop on loss_location 
+
+    !! loop on loss_location
     do i = 1, loss_parameters % number_loss_locations
        !! get length indexing
        z_start = loss_parameters % loss_location(i)
@@ -835,9 +834,9 @@ contains
        if (arr_end > numerical_parameters % num_grid_pts) then
           arr_end = numerical_parameters % num_grid_pts
        end if
-       
+
        !print*, arr_start, arr_end
-       
+
        do j = 1, M !! loop on all frequencies
           !! get the value of alpha for this location and frequency
           if (loss_parameters % use_loss_model) then
@@ -846,7 +845,7 @@ contains
           !else
           call data_alpha(i,j,tmp_alpha)
           !end if
-          
+
           !! fill in alpha_matrix with tmp_alpha
           !! if arr_start == arr_end then the last loss_location is equal to
           !! circuit length. in this case don't want to record loss data. if
@@ -859,7 +858,7 @@ contains
           end if
        end do !! end loop on frequencies
     end do !! end loop on loss locations
-    
+
     !! interpolate results
     if (loss_parameters % intrplt_btwn_points &
          .or. loss_parameters % intrplt_over_length) then
@@ -869,18 +868,18 @@ contains
   subroutine plot_dispersion_data
     integer :: i, j
     real(dp) :: scale
-    
+
     if (units_structure % length_cm) then
        scale = 100.0
     else
        scale = 1.0
     end if
-    
+
     open(1,file='./outputs/vph.dat', action='write')
     open(2,file='./outputs/impedance.dat', action='write')
     open(3,file='./outputs/scrf.dat', action='write')
     open(4,file='./outputs/loss.dat', action='write')
-    
+
     !! write some file headers
     if (output_parameters % file_headers) then
        write(1, fmt="(A43)") 'cold circuit phase velocity versus distance'
@@ -984,7 +983,7 @@ contains
     close(3)
     close(4)
   end subroutine plot_dispersion_data
-  
+
   !! compute normalized derived ckt qtys
   subroutine derived_ckt_qtys(R_matrix, L_matrix, G_matrix, C_matrix,&
        pC_matrix)
@@ -998,11 +997,11 @@ contains
          intent(inout) :: C_matrix
     real(dp), dimension(-M:M,0:numerical_parameters % num_grid_pts), &
          intent(inout) :: pC_matrix
-    
+
     integer i, j
     complex(dp) Gamma, complex_K, X, Y
     real(dp) a
-    
+
     !! loop on frequency
     do i = 1, M
        !! loop on distance
@@ -1013,11 +1012,11 @@ contains
                   fl(i) * frequency_parameters % base_frequency &
                   / vph_matrix(i,j))
              complex_K = cmplx(K_matrix(i,j))
-             
+
              !! compute X, and Y
              X = conjg(Gamma * complex_K)
              Y = conjg(Gamma / complex_K)
-             
+
              !!assign values. these are normalized!!
              R_matrix(i,j) = real(X) &
                   * (circuit_parameters % circuit_length / K_matrix(i,j))
@@ -1029,11 +1028,11 @@ contains
              C_matrix(i,j) = -(1.0/(fl(i) &
                   * frequency_parameters % base_frequency))*aimag(Y) &
                   * (derived_qtys % u0 * K_matrix(i,j))
-             
+
              !!pierce parameter
              pC_matrix(i,j) = (K_matrix(i,j)*beam_parameters % current &
                   /(4.0*beam_parameters % voltage)) ** 0.333333333
-             
+
              !print*, R_matrix(i,j), L_matrix(i,j)
              !print*, G_matrix(i,j), C_matrix(i,j)
              !print*, pC_matrix(i,j)
@@ -1047,74 +1046,74 @@ contains
        end do !! end loop on distance
     end do !! end loop on frequency
   end subroutine derived_ckt_qtys
-  
+
   !*** functions of (z,f) from dispersion arrays ***!
   !! phase velocity function
   function vph(z,i)
     real(dp) vph
     real(dp), intent(in) :: z !! distance
     integer, intent(in) :: i !! frequency index
-    
+
     integer j !!distance integer
-    
+
     !!first get integer for distance
     j = numerical_parameters % num_grid_pts &
          * (z / circuit_parameters % circuit_length)
-    
+
     vph = vph_matrix(i,j)
   end function vph
-  
+
   !! impedance function
   function K(z,i)
     real(dp) K
     real(dp), intent(in) :: z !! distance
     integer, intent(in) :: i !! frequency index
-    
+
     integer j !!distance integer
-    
+
     !!first get integer for distance
     j = numerical_parameters % num_grid_pts &
          * (z / circuit_parameters % circuit_length)
-    
+
     K = K_matrix(i,j)
   end function K
-  
+
   !! space charge reduction factor function
   function scrf(z,i)
     real(dp) scrf
     real(dp), intent(in) :: z !! distance
     integer, intent(in) :: i !! frequency index
-    
+
     integer j !!distance integer
-    
+
     !!first get integer for distance
     j = numerical_parameters % num_grid_pts &
          * (z / circuit_parameters % circuit_length)
-    
+
     scrf = scrf_matrix(i,j)
   end function scrf
-  
+
   !! loss Np/m function
   function alpha(z,i)
     real(dp) alpha
     real(dp), intent(in) :: z !! distance
     integer, intent(in) :: i !! frequency index
-    
+
     integer j !!distance integer
-    
+
     !!first get integer for distance
     j = numerical_parameters % num_grid_pts &
          * (z / circuit_parameters % circuit_length)
-    
+
     alpha = alpha_matrix(i,j)
   end function alpha
-  
+
   !! normalized resistance R function
   function R(z,i)
     real(dp) R
     real(dp), intent(in) :: z !! distance
     integer, intent(in) :: i !! frequency index
-    
+
     integer j !!distance integer
 
     !!first get integer for distance, z is normalized to 1.0
@@ -1124,18 +1123,18 @@ contains
     if (j > numerical_parameters % num_grid_pts) then
        j = numerical_parameters % num_grid_pts
     end if
-    
+
     R = R_matrix(i,j)
   end function R
-  
+
   !! normalized inductance L function
   function L(z,i)
     real(dp) L
     real(dp), intent(in) :: z !! distance
     integer, intent(in) :: i !! frequency index
-    
+
     integer j !!distance integer
-    
+
     !!first get integer for distance, z normalized to 1.0
     j = numerical_parameters % num_grid_pts * z
          !* (z / circuit_parameters % circuit_length)
@@ -1146,15 +1145,15 @@ contains
 
     L = L_matrix(i,j)
   end function L
-  
+
   !! normalized conductance G function
   function G(z,i)
     real(dp) G
     real(dp), intent(in) :: z !! distance
     integer, intent(in) :: i !! frequency index
-    
+
     integer j !!distance integer
-    
+
     !!first get integer for distance, z normalized to 1.0
     j = numerical_parameters % num_grid_pts * z
          !* (z / circuit_parameters % circuit_length)
@@ -1162,18 +1161,18 @@ contains
     if (j > numerical_parameters % num_grid_pts) then
        j = numerical_parameters % num_grid_pts
     end if
-    
+
     G = G_matrix(i,j)
   end function G
-  
+
   !! normalized capacitance Ca function
   function Ca(z,i)
     real(dp) Ca
     real(dp), intent(in) :: z !! distance
     integer, intent(in) :: i !! frequency index
-    
+
     integer j !!distance integer
-    
+
     !!first get integer for distance
     j = numerical_parameters % num_grid_pts * z
          !* (z / circuit_parameters % circuit_length)
@@ -1181,18 +1180,18 @@ contains
     if (j > numerical_parameters % num_grid_pts) then
        j = numerical_parameters % num_grid_pts
     end if
-    
+
     Ca = C_matrix(i,j)
   end function Ca
-  
+
   !! normalized space charge reduction factor function
   function nscrf(z,i)
     real(dp) nscrf
     real(dp), intent(in) :: z !! distance
     integer, intent(in) :: i !! frequency index
-    
+
     integer j !!distance integer
-    
+
     !!first get integer for distance, z normalized to 1.0
     j = numerical_parameters % num_grid_pts * z
          !* (z / circuit_parameters % circuit_length)
@@ -1200,7 +1199,7 @@ contains
     if (j > numerical_parameters % num_grid_pts) then
        j = numerical_parameters % num_grid_pts
     end if
-    
+
     nscrf = nscrf_matrix(i,j)
   end function nscrf
 
@@ -1209,9 +1208,9 @@ contains
     real(dp) nvph
     real(dp), intent(in) :: z !! distance
     integer, intent(in) :: i !! frequency index
-    
+
     integer j !!distance integer
-    
+
     !!first get integer for distance, z normalized to 1.0
     j = numerical_parameters % num_grid_pts * z
          !* (z / circuit_parameters % circuit_length)
@@ -1219,18 +1218,18 @@ contains
     if (j > numerical_parameters % num_grid_pts) then
        j = numerical_parameters % num_grid_pts
     end if
-    
+
     nvph = nvph_matrix(i,j)
   end function nvph
-  
+
   !! pierce parameter C function
   function pC(z,i)
     real(dp) pC
     real(dp), intent(in) :: z !! distance
     integer, intent(in) :: i !! frequency index
-    
+
     integer j !!distance integer
-    
+
     !!first get integer for distance, z normalized to 1.0
     j = numerical_parameters % num_grid_pts * z
          !* (z / circuit_parameters % circuit_length)
@@ -1238,7 +1237,7 @@ contains
     if (j > numerical_parameters % num_grid_pts) then
        j = numerical_parameters % num_grid_pts
     end if
-    
+
     pC = pC_matrix(i,j)
   end function pC
 
@@ -1247,9 +1246,9 @@ contains
     complex(dp) Z_factor
     real(dp), intent(in) :: z !! distance
     integer, intent(in) :: i !! frequency index
-    
+
     integer j !!distance integer
-    
+
     !!first get integer for distance, z normalized to 1.0
     j = numerical_parameters % num_grid_pts * z
          !* (z / circuit_parameters % circuit_length)
@@ -1257,23 +1256,23 @@ contains
     if (j > numerical_parameters % num_grid_pts) then
        j = numerical_parameters % num_grid_pts
     end if
-    
+
     Z_factor = Z_factor_matrix(i,j)
   end function Z_factor
-  
-  
-  
+
+
+
   !*** compute dispersion parameters from models ***!
   subroutine tape_helix(i,j,tmpvph,tmpK)
     integer, intent(in) :: i, j !! i is section index and j is freq index
     real(dp), intent(inout) :: tmpvph, tmpK
-    
+
   end subroutine tape_helix
 
   subroutine sheath_helix(i,j,tmpvph,tmpK)
     integer, intent(in) :: i, j !! i is section index and j is freq index
     real(dp), intent(inout) :: tmpvph, tmpK
-    
+
     real(dp) :: a, gamma, cotanpsi, x1, x2
     !! bessel functions from mini_slatec library
     real(dp) :: dbesi0, dbesi1, dbesk0, dbesk1
@@ -1316,7 +1315,7 @@ contains
     real(dp) :: f1, f2
 
     !!print*, 'In Bracket Function'
-	
+
     if (x1 == x2) then
        print*, 'bad initial range in bracket'
     end if
@@ -1374,7 +1373,7 @@ contains
        rtb = x2
        dx = x1 - x2
     end if
-	
+
     do kk = 1,  KKMAX
        dx = dx * 0.5
        xmid = rtb + dx
@@ -1412,10 +1411,10 @@ contains
   subroutine data_helix(i,j,tmpvph,tmpK)
     integer, intent(in) :: i, j !! i is section index and j is freq index
     real(dp), intent(inout) :: tmpvph, tmpK
-    
+
     integer k, tmpLow, tmpHigh
     real(dp) vp2, vp1, K2, K1
-    
+
     !!determine if frequency is a ckt freq
     if (fl(j) < frequency_parameters % min_ckt_freq &
          .or. fl(j) > frequency_parameters % max_ckt_freq) then
@@ -1438,7 +1437,7 @@ contains
        else
           tmpLow = tmpHigh
        end if
-       
+
        !!assign the answer
        if (tmpHigh == fl(j)) then
           tmpvph = dispersion_parameters % phase_velocity(i,k)
@@ -1495,7 +1494,7 @@ contains
        print*, 'Stopping.'
        stop
     end if
-    
+
     if (rbi /= 0.0) then !!annular beam
        term1 = rbo*dbesi1(kappa*rbo) - rbi*dbesi1(kappa*rbi)
        term2 = -rbo*dbesk1(kappa*rbo) &
@@ -1517,10 +1516,10 @@ contains
   subroutine data_scrf(i,j,tmp_scrf)
     integer, intent(in) :: i, j !! i is section index and j is freq index
     real(dp), intent(inout) :: tmp_scrf
-    
+
     integer k, tmpLow, tmpHigh
     real(dp) scrf_2, scrf_1
-    
+
     !!determine if frequency is a space_charge_freq
     if (fl(j) < frequency_parameters % min_space_charge_freq &
          .or. fl(j) > frequency_parameters % max_space_charge_freq) then
@@ -1542,7 +1541,7 @@ contains
        else
           tmpLow = tmpHigh
        end if
-       
+
        !!assign the answer
        if (tmpHigh == fl(j)) then
           tmp_scrf = dispersion_parameters % space_charge_redux(i,k)
@@ -1562,21 +1561,21 @@ contains
        !print*, scrf_1, tmp_scrf, scrf_2
     end if
   end subroutine data_scrf
-  
+
   subroutine loss_model(i,j,tmp_alpha)
     integer, intent(in) :: i, j !! i is section index and j is freq index
     real(dp), intent(inout) :: tmp_alpha
-    
+
     print*, 'loss_model not implemented, using data'
   end subroutine loss_model
-  
+
   subroutine data_alpha(i,j,tmp_alpha)
     integer, intent(in) :: i, j !! i is section index and j is freq index
     real(dp), intent(inout) :: tmp_alpha
-    
+
     integer k, tmpLow, tmpHigh
     real(dp) alpha_2, alpha_1
-    
+
     !!determine if frequency is a ckt freq
     if (fl(j) < frequency_parameters % min_ckt_freq &
          .or. fl(j) > frequency_parameters % max_ckt_freq) then
@@ -1598,7 +1597,7 @@ contains
        else
           tmpLow = tmpHigh
        end if
-       
+
        !!assign the answer
        if (tmpHigh == fl(j)) then
           tmp_alpha = loss_parameters % loss(i,k)
@@ -1618,7 +1617,7 @@ contains
        !print*, alpha_1, tmp_alpha, alpha_2
     end if
   end subroutine data_alpha
-  
+
   subroutine interpolate_dispersion(vph_matrix, K_matrix, scrf_matrix)
     real(dp), dimension(-M:M,0:numerical_parameters % num_grid_pts), &
          intent(inout) :: vph_matrix
@@ -1626,7 +1625,7 @@ contains
          intent(inout) :: K_matrix
     real(dp), dimension(-M:M,0:numerical_parameters % num_grid_pts), &
          intent(inout) :: scrf_matrix
-    
+
     integer :: i, j, k, arr_start, arr_end, section
     real(dp) :: z_start, z_end, vp1, vp2, K1, K2, scrf_1, scrf_2
 
@@ -1671,16 +1670,16 @@ contains
              print*, 'Stopping.'
              stop
           end if
-       
+
           !! get indices for these z_start and z_end
           arr_start = numerical_parameters % num_grid_pts &
                * (z_start / circuit_parameters % circuit_length)
           arr_end = numerical_parameters % num_grid_pts &
                * (z_end / circuit_parameters % circuit_length)
-       
+
           !print*, z_start, z_end
           !print*, arr_start, arr_end
-       
+
           do j = 1, M !! loop on all frequencies
              vp1 = vph_matrix(j,arr_start)
              vp2 = vph_matrix(j,arr_end)
@@ -1781,14 +1780,14 @@ contains
        end do
     end if
   end subroutine interpolate_dispersion
-  
+
   subroutine interpolate_loss(alpha_matrix)
     real(dp), dimension(-M:M,0:numerical_parameters % num_grid_pts), &
          intent(inout) :: alpha_matrix
-    
+
     integer i, j, k, arr_start, arr_end
     real(dp) z_start, z_end, alpha_1, alpha_2
-    
+
     !! interpolate over length
     if (loss_parameters % intrplt_over_length) then
        !! loop on loss locations
@@ -1829,13 +1828,13 @@ contains
              print*, 'Stopping.'
              stop
           end if
-          
+
           !! get indices for these z_start and z_end
           arr_start = numerical_parameters % num_grid_pts &
                * (z_start / circuit_parameters % circuit_length)
           arr_end = numerical_parameters % num_grid_pts &
                * (z_end / circuit_parameters % circuit_length)
-          
+
           do j = 1, M !! loop on all frequencies
              alpha_1 = alpha_matrix(j,arr_start)
              alpha_2 = alpha_matrix(j,arr_end)
@@ -1865,10 +1864,10 @@ contains
                * (z_start / circuit_parameters % circuit_length)
           arr_end = numerical_parameters % num_grid_pts &
                * (z_end / circuit_parameters % circuit_length)
-          
+
           !print*, z_start, z_end
           !print*, arr_start, arr_end
-          
+
           !! loop on all frequencies
           do j = 1, M
              alpha_1 = alpha_matrix(j,arr_start)
@@ -1881,10 +1880,10 @@ contains
                      * (k - arr_start) + alpha_1
              end do !! end loop on points in alpha_matrix
           end do !! end loop on frequencies
-          
+
        end do !! end loop on loss locations
     end if
-    
+
   end subroutine interpolate_loss
-  
+
 end module working_variables

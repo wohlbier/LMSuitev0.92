@@ -8,23 +8,23 @@
 # At line 754 of file parameters.f90 (unit = 2, file = './inputs/movies.nml')
 # Fortran runtime error: Cannot match namelist object name namelist)
 # A quick google indicates this is a gfortran compiler bug.
-#F90 = gfortran
-#F77 = gfortran
-##FFLAGS_LMSUITE = -g -O0
-##FFLAGS_LIBS = -g -O0
-#FFLAGS_LMSUITE = -O3
-#FFLAGS_LIBS = -O3
-#FFLAGS_LINK =
-
-# This is the only known compiler that works. "Tested" with version 14.0.4.
-# ifort.
-F90 = ifort
-F77 = ifort
+F90 = gfortran
+F77 = gfortran
 #FFLAGS_LMSUITE = -g -O0
 #FFLAGS_LIBS = -g -O0
 FFLAGS_LMSUITE = -O3
 FFLAGS_LIBS = -O3
 FFLAGS_LINK =
+
+# This is the only known compiler that works. "Tested" with version 14.0.4.
+# ifort.
+#F90 = ifort
+#F77 = ifort
+##FFLAGS_LMSUITE = -g -O0
+##FFLAGS_LIBS = -g -O0
+#FFLAGS_LMSUITE = -O3
+#FFLAGS_LIBS = -O3
+#FFLAGS_LINK =
 
 CLEANUP =  *~ *.mod
 
