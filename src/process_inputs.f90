@@ -51,57 +51,57 @@ subroutine process_inputs
      call set_default_parameters !! still need to check that this works!!
   end if
 
-!  !****  print details of LMSuite  ****!
-!  call about_lmsuite
-!10 format(A)
-!20 format(/,/,/,/,/,/,/,/)
-!  if (.not.file_stat) then
-!     print 20
-!     print*, './inputs/lmsuite.nml does not exist, running default example'
-!     print 20
-!     print*, '(press enter to continue)'
-!     read 10, junk
-!  end if
-!
-!!** if interface_parameters % echo_namelists is true, then echo to screen **!
-!  if (interface_parameters % echo_namelists) then
-!     call echo_parameters
-!  end if
-!
-!
-!
-!contains
-!  !****  subroutine to print details of LMSuite  ****!
-!  subroutine about_lmsuite
-!    character junk
-!    print*, ''
-!    print*, ''
-!    print*, ''
-!    print*, ''
-!    print*, ''
-!    print*, ''
-!    print*, ''
-!    print*, ''
-!    print*, 'LATTE/MUSE Numerical Suite v0.92.'
-!    print*, 'Copyright 2003 John G. Wohlbier'
-!    print*, 'This software is protected under the Gnu General Public License (GPL)'
-!    print*, 'For the text of the GPL, see the file COPYING or go to'
-!    print*, 'http://www.gnu.org/licenses/licenses.html'
-!    print*, ''
-!    print*, ''
-!    print*, ''
-!    print*, ''
-!    print*, ''
-!    print*, ''
-!    print*, ''
-!    print*, ''
-!    print*, ''
-!    print*, ''
-!30  format(A)
-!    if (interface_parameters % with_pauses) then
-!       print*, '(press enter to continue)'
-!       read 30, junk
-!    end if
-!  end subroutine about_lmsuite
+  !****  print details of LMSuite  ****!
+  call about_lmsuite
+10 format(A)
+20 format(/,/,/,/,/,/,/,/)
+  if (.not.file_stat) then
+     print 20
+     print*, './inputs/lmsuite.nml does not exist, running default example'
+     print 20
+     print*, '(press enter to continue)'
+     read 10, junk
+  end if
+
+!** if interface_parameters % echo_namelists is true, then echo to screen **!
+  if (interface_parameters % echo_namelists) then
+     call echo_parameters
+  end if
+
+
+
+contains
+  !****  subroutine to print details of LMSuite  ****!
+  subroutine about_lmsuite
+    character junk
+    print*, ''
+    print*, ''
+    print*, ''
+    print*, ''
+    print*, ''
+    print*, ''
+    print*, ''
+    print*, ''
+    print*, 'LATTE/MUSE Numerical Suite v0.92.'
+    print*, 'Copyright 2003 John G. Wohlbier'
+    print*, 'This software is protected under the Gnu General Public License (GPL)'
+    print*, 'For the text of the GPL, see the file COPYING or go to'
+    print*, 'http://www.gnu.org/licenses/licenses.html'
+    print*, ''
+    print*, ''
+    print*, ''
+    print*, ''
+    print*, ''
+    print*, ''
+    print*, ''
+    print*, ''
+    print*, ''
+    print*, ''
+30  format(A)
+    if (interface_parameters % with_pauses) then
+       print*, '(press enter to continue)'
+       read 30, junk
+    end if
+  end subroutine about_lmsuite
   
 end subroutine process_inputs
