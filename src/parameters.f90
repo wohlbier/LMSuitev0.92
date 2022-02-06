@@ -27,6 +27,9 @@ module parameters
 !** no implicit variable naming **!
   implicit none
 
+  character(len=256) :: path_to_inputs_directory
+  character(len=256) :: path_to_lmsuite_nml
+
 !*********************************************************!
 !********************  constants  ************************!
 !*********************************************************!
@@ -682,7 +685,7 @@ contains
 10  format(/,/,/,'Reading parameters from lmsuite.nml',/)
     print 10
 
-    open(1,file='./inputs/lmsuite.nml')
+    open(1,file=path_to_lmsuite_nml)
 
 !*****************  read namelist user_interface  *****************!
     print*, 'Reading namelist user_interface'
@@ -742,14 +745,15 @@ contains
     !**** read namelist movies if there are movies ****!
     if (run_parameters % num_movie_namelists > 0) then
        print "(t5,'reading movies.nml')"
-       inquire(file='./inputs/movies.nml', exist=file_stat)
+       inquire(file=trim(path_to_inputs_directory)//"movies.nml", &
+            exist=file_stat)
        if (.not. file_stat) then
           print*, ''
           print*, 'File inputs/movies.nml does not exist. Stopping.'
           print*, ''
           stop
        else if (file_stat) then
-          open(2,file='./inputs/movies.nml')
+          open(2,file=trim(path_to_inputs_directory)//"movies.nml")
           do i = 1, run_parameters % num_movie_namelists
              read(2,movie)
              call init_movie_data(run_parameters % movie_data_array(i), &
@@ -872,14 +876,15 @@ contains
     !if read_from_file, overwrite data read into namelist
     if (circuit_parameters % read_from_file) then
        print "(t5,'reading file circuit.in')"
-       inquire(file='./inputs/circuit.in', exist=file_stat)
+       inquire(file=trim(path_to_inputs_directory)//"/circuit.in", &
+            exist=file_stat)
        if (.not. file_stat) then
           print*, ''
           print*, 'File inputs/circuit.in does not exist. Stopping.'
           print*, ''
           stop
        else if (file_stat) then
-          open(2,file='./inputs/circuit.in')
+          open(2,file=trim(path_to_inputs_directory)//"/circuit.in")
           do i = 1, circuit_parameters % number_ckt_sections
              read(2, *) ckt_section_location(i), &
                   tape_width(i), &
@@ -927,7 +932,8 @@ contains
 
     if (dispersion_parameters % read_from_file) then
        print "(t5,'reading file dispersion.in')"
-       inquire(file='./inputs/dispersion.in', exist=file_stat)
+       inquire(file=trim(path_to_inputs_directory)//'/dispersion.in', &
+            exist=file_stat)
        if (.not. file_stat) then
           print*, ''
           print*, 'File inputs/dispersion.in does not exist. Stopping.'
@@ -944,7 +950,7 @@ contains
           ! when a conversion is done one is overwriting data. in the namelist
           ! case one doesn't overwrite the array data, so parameters that
           ! need multiple coversions have to be processed differently.
-          open(2,file='./inputs/dispersion.in')
+          open(2,file=trim(path_to_inputs_directory)//'/dispersion.in')
           do i = 1, circuit_parameters % number_ckt_sections
              do j = 1, dispersion_parameters % num_dispersion_freqs
                 read(2,*) dispersion_parameters % &

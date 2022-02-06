@@ -32,7 +32,8 @@ subroutine clean_outputs
   if (output_parameters % clean_outputs) then
      print*, 'CLEAN_OUTPUTS=TRUE: REMOVING ALL FILES IN ./outputs/'
      print*, ''
-     shell = system("cd ./outputs ; rm -f *")
+     shell = system("rm -rf ./outputs")
+     shell = system("mkdir ./outputs")     
   end if
 
 

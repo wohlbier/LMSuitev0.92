@@ -15,7 +15,6 @@ set (SRC
      initialize.f90
      latte_dc_constant.f90
      main.f90
-     makefile_linux
      make_frames.f90
      mini_blas
      mini_lapack

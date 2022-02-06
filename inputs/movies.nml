@@ -6,23 +6,22 @@ Notes:
 num_movie_namelists > 0
 
 !**************************************************************************!
-movie namelist
-- movie_type:	integer selecting TWT state variable to create frames for.
-		use the following legend:
-		1=circuit voltage, 2=circuit current, 3=space charge field,
-		4=beam velocity, 5=beam charge density, 6=beam current,
-		7=phase space
-- time:		real number for final time (in seconds). frame files will
-		be generated between zero seconds and this value.
-- num_frames:   integer number of movie frames to create. if intent is to
-		view signal at a specific time, set equal to 1 and enter
-		desired time in time variable below. note: if intend to merge
-		multiple movies (each created by a separate &movie namelist)
-		into one avi using matlab code movie_maker.m, make sure to
-		use the same number of frames in each data namelist.
-- scale:	real number scaling factor for exponential growth rates,
-		i.e. to reduce to the growth rate in cases when the growth
-		rate is too large to allow visualization on a linear scale.
+!- movie_type:	integer selecting TWT state variable to create frames for.
+!		use the following legend:
+!		1=circuit voltage, 2=circuit current, 3=space charge field,
+!		4=beam velocity, 5=beam charge density, 6=beam current,
+!		7=phase space
+!- time:	real number for final time (in seconds). frame files will
+!		be generated between zero seconds and this value.
+!- num_frames:   integer number of movie frames to create. if intent is to
+!		view signal at a specific time, set equal to 1 and enter
+!		desired time in time variable below. note: if intend to merge
+!		multiple movies (each created by a separate &movie namelist)
+!		into one avi using matlab code movie_maker.m, make sure to
+!		use the same number of frames in each data namelist.
+!- scale:	real number scaling factor for exponential growth rates,
+!		i.e. to reduce to the growth rate in cases when the growth
+!		rate is too large to allow visualization on a linear scale.
 !**************************************************************************!
 &movie
 	movie_type = 1

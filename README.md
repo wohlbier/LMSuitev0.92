@@ -1,3 +1,14 @@
+Build dependencies
+- Fortran compiler
+- cmake
+
+```
+mkdir build
+cd build
+../arch/gfortran.sh
+./bin/lmsuite
+```
+
 The original author of lmsuite is
 John G. Wohlbier
 Carnegie Mellon University
