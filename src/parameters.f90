@@ -301,7 +301,7 @@ contains
     frequency_parameters % max_ckt_freq = 3200
     frequency_parameters % min_space_charge_freq = 0
     frequency_parameters % max_space_charge_freq = 3200
-    
+
     !*** circuit_parameters ***!
     circuit_parameters % echo_circuit = .true.
     circuit_parameters % circuit_length = 0.42
@@ -322,7 +322,7 @@ contains
          (/ 0.0, (0.0, i=1, max_ckt_sections-1) /)
     circuit_parameters % input_TL_impedance = 50.0
     circuit_parameters % output_TL_impedance = 50.0
-    
+
     !*** dispersion_parameters ***!
     dispersion_parameters % echo_dispersion = .true.
     dispersion_parameters % vph_over_c = .true.
@@ -407,7 +407,7 @@ contains
     numerical_parameters % fnt0 = 1.5 !!copies christine parameter, LATTE only
     numerical_parameters % adaptive_step = .false.
     numerical_parameters % tolerance = 1.0e-6
-    
+
   end subroutine set_default_parameters
 
   !*********************************************************!
@@ -765,7 +765,7 @@ contains
 
 !*****************  read namelist output_data  *****************!
     print*, 'Reading namelist output_data'
-    read(1,output_data) 
+    read(1,output_data)
     output_parameters % echo_output = echo_output
     output_parameters % clean_outputs = clean_outputs
     output_parameters % file_headers = file_headers
@@ -813,6 +813,11 @@ contains
 
 !*****************  read namelist frequency_list ******************!
     print*, 'Reading namelist frequency_list'
+    ! initialize arrays for reading
+    frequency_integer = 0
+    power_input = 0.0
+    phase_input = 0.0
+
     read(1,frequency_list)
     frequency_parameters % echo_frequencies = echo_frequencies
     frequency_parameters % num_input_freqs = num_input_freqs
@@ -869,6 +874,14 @@ contains
 
 !*****************  read namelist circuit ******************!
     print*, 'Reading namelist circuit'
+    ! initialize arrays for reading
+    ckt_section_location = 0.0
+    tape_width = 0.0
+    helix_radius = 0.0
+    helix_pitch = 0.0
+    vane_radius = 0.0
+    wall_radius = 0.0
+
     read(1,circuit)
     circuit_parameters % echo_circuit = echo_circuit
     circuit_parameters % number_ckt_sections = number_ckt_sections
@@ -923,6 +936,13 @@ contains
 
     !*****************  read namelist dispersion ******************!
     print*, 'Reading namelist dispersion'
+    ! initialize arrays for reading
+    num_dispersion_freqs = 0
+    dispersion_freq_integer = 0
+    interpol_sects_list = 0
+    phase_velocity = 0.0
+    impedance = 0.0
+    space_charge_redux = 0.0
 
     read(1,dispersion)
     dispersion_parameters % echo_dispersion = echo_dispersion
@@ -1031,6 +1051,11 @@ contains
 
 !*****************  read namelist losses ******************!
     print*, 'Reading namelist losses'
+    ! initialize arrays for reading
+    loss_freq_integer = 0
+    loss_location = 0.0
+    loss = 0.0
+
     read(1,losses)
     loss_parameters % echo_losses = echo_losses
     loss_parameters % number_loss_locations = number_loss_locations
@@ -1150,7 +1175,7 @@ contains
        beam_parameters % beam_velocity = beam_velocity
     end if
     beam_parameters % specify_velocity = specify_velocity
-    
+
 !*****************  read namelist numerical_data ******************!
     print*, 'Reading namelist numerical_data'
     read(1,numerical_data)
@@ -1474,7 +1499,7 @@ contains
              if (dispersion_parameters % vph_over_c) then
                 tmpVPH = dispersion_parameters % phase_velocity(i,j) / c
              end if
-             !convert loss, have to check three cases.             
+             !convert loss, have to check three cases.
 
              print "(t5,i5,t17,en11.2,t31,en11.2,t43,en11.2)", &
                   dispersion_parameters % dispersion_freq_integer(i,j), &
@@ -1544,7 +1569,7 @@ contains
                tmpLOC
          print "(t2,'loss_freq_int',t22,'loss')"
           do j = 1, loss_parameters % number_loss_freqs
-             !convert loss, have to check three cases.             
+             !convert loss, have to check three cases.
              ! input is Np/m
              tmpAlpha = loss_parameters % loss(i,j)
              ! input is dB/cm

@@ -48,7 +48,7 @@ subroutine initialize
        .or. output_parameters % conserved_quantity_vs_z &
        .or. output_parameters % beam_energy_vs_z &
        .or. output_parameters % dc_beam_vel_vs_z &
-       .or. output_parameters % phase_space) then 
+       .or. output_parameters % phase_space) then
      vs_z_plot = .true.
   end if
   if (output_parameters % power_out_vs_freq &
@@ -84,12 +84,15 @@ subroutine destroy
   print*, ''
 
   deallocate(fl)
+  deallocate(pair_matrix)
 
   deallocate(vph_matrix)
+  deallocate(nvph_matrix)
   deallocate(K_matrix)
   deallocate(alpha_matrix)
   deallocate(scrf_matrix)
   deallocate(nscrf_matrix)
+  deallocate(Z_factor_matrix)
 
   deallocate(R_matrix)
   deallocate(L_matrix)
