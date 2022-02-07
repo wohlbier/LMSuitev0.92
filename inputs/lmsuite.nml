@@ -61,7 +61,7 @@ namelist user_interface
 	echo_runtime_one = true
 	echo_runtime_two = true
 	echo_runtime_three = true
-	with_pauses = true
+	with_pauses = false
 &end
 !*************************************************************************!
 !*************************************************************************!

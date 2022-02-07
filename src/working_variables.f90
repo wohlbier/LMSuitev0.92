@@ -209,6 +209,7 @@ contains
     !*** compute OmegaAlphas ***!
     ! allocate OmegaAlpha
     allocate(OmegaAlpha(HOI, -max_freqs:max_freqs))
+    OmegaAlpha = 0
     ! set OmegaAlpha to 0's
     do i = 1, HOI
        do j = -max_freqs, max_freqs
@@ -238,6 +239,7 @@ contains
        tM_columns = OA_size**2
        ! allocate tmpMatrix
        allocate(tmpMatrix(tM_rows,tM_columns))
+       tmpMatrix = 0
        !make tmpMatrix all zeros
        tmpMatrix = &
             reshape(source=(/(0, k = 1, tM_rows * tM_columns)/), &
@@ -414,11 +416,7 @@ contains
 
       !allocate space for fl
       allocate(fl(-M:M))
-
-      do i = 0, M
-         fl(i) = 0
-         fl(-i) = 0
-      end do
+      fl = 0
 
       !fill in fl
       j = 1
@@ -565,11 +563,7 @@ contains
     integer :: i, j, kk, num_pairs
 
     allocate(pair_matrix(-M:M,1:2*(2*M+1)+2))
-    do i = -M, M
-       do j = 1, 2*(M+2)
-          pair_matrix(i,j) = 0
-       end do
-    end do
+    pair_matrix = 0
 
     do i = -M, M
        pair_matrix(i,1) = i
@@ -619,12 +613,19 @@ contains
     !!(num_ckt_sections, num_input_freqss, num_grid_pts)
     !! second 0 index corresponds to z = 0.0
     allocate(vph_matrix(-M:M, 0:numerical_parameters % num_grid_pts))
+    vph_matrix = 0.0
     allocate(nvph_matrix(-M:M, 0:numerical_parameters % num_grid_pts))
+    nvph_matrix = 0.0
     allocate(K_matrix(-M:M, 0:numerical_parameters % num_grid_pts))
+    K_matrix = 0.0
     allocate(alpha_matrix(-M:M, 0:numerical_parameters % num_grid_pts))
+    alpha_matrix = 0.0
     allocate(scrf_matrix(-M:M, 0:numerical_parameters % num_grid_pts))
+    scrf_matrix = 0.0
     allocate(nscrf_matrix(-M:M, 0:numerical_parameters % num_grid_pts))
+    nscrf_matrix = 0.0    
     allocate(Z_factor_matrix(-M:M, 0:numerical_parameters % num_grid_pts))
+    Z_factor_matrix = 0.0
 
     !! compute initial dispersion
     if (interface_parameters % echo_initialization) then
@@ -642,10 +643,15 @@ contains
 
     !! now get derived circuit quantities
     allocate(R_matrix(-M:M, 0:numerical_parameters % num_grid_pts))
+    R_matrix = 0.0
     allocate(L_matrix(-M:M, 0:numerical_parameters % num_grid_pts))
+    L_matrix = 0.0
     allocate(G_matrix(-M:M, 0:numerical_parameters % num_grid_pts))
+    G_matrix = 0.0
     allocate(C_matrix(-M:M, 0:numerical_parameters % num_grid_pts))
+    C_matrix = 0.0
     allocate(pC_matrix(-M:M, 0:numerical_parameters % num_grid_pts))
+    pC_matrix = 0.0
 
     if (interface_parameters % echo_initialization) then
        print*, 'Computing derived circuit quantities R, L, G, C, and pierce C'
