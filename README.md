@@ -8,7 +8,7 @@ Build dependencies
 mkdir build
 cd build
 ../arch/gfortran.sh
-./bin/lmsuite
+./bin/lmsuite ../inputs/
 ```
 
 The original author of lmsuite is
