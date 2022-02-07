@@ -1,3 +1,5 @@
+Tested on Ubuntu 20.04 x86 and aarch64 with gfortran 9.3.0.
+
 Build dependencies
 - Fortran compiler
 - cmake
