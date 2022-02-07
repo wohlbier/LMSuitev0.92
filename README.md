@@ -11,10 +11,16 @@ cd build
 ./bin/lmsuite ../inputs/
 ```
 
+===============================================================================
+
 The original author of lmsuite is
+
 John G. Wohlbier
+
 Carnegie Mellon University
+
 Software Engineering Institute
+
 jgwohlbier@sei.cmu.edu
 
 lmsuite was written while doing graduate work at the University of Wisconsin
