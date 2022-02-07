@@ -21,7 +21,7 @@ Carnegie Mellon University
 
 Software Engineering Institute
 
-jgwohlbier@sei.cmu.edu
+jgwohlbier sei cmu edu
 
 lmsuite was written while doing graduate work at the University of Wisconsin
 under Prof. John Booske.
