@@ -721,14 +721,14 @@ contains
     !**** read namelist scan if there are scans ****!
     if (run_parameters % num_scan_namelists > 0) then
        print "(t5,'reading scan_data.nml')"
-       inquire(file='./inputs/scan_data.nml', exist=file_stat)
+       inquire(file=trim(path_to_inputs_directory)//"/scan_data.nml", exist=file_stat)
        if (.not. file_stat) then
           print*, ''
-          print*, 'File inputs/scan_data.nml does not exist. Stopping.'
+          print*, 'File scan_data.nml does not exist in inputs folder. Stopping.'
           print*, ''
           stop
        else if (file_stat) then
-          open(2,file='./inputs/scan_data.nml')
+          open(2,file=trim(path_to_inputs_directory)//"/scan_data.nml")
           do i = 1, run_parameters % num_scan_namelists
              read(2,scan)
              call init_scan_data(run_parameters % scan_data_array(i), &
@@ -745,15 +745,14 @@ contains
     !**** read namelist movies if there are movies ****!
     if (run_parameters % num_movie_namelists > 0) then
        print "(t5,'reading movies.nml')"
-       inquire(file=trim(path_to_inputs_directory)//"movies.nml", &
-            exist=file_stat)
+       inquire(file=trim(path_to_inputs_directory)//"/movies.nml", exist=file_stat)
        if (.not. file_stat) then
           print*, ''
-          print*, 'File inputs/movies.nml does not exist. Stopping.'
+          print*, 'File movies.nml does not exist in inputs folder. Stopping.'
           print*, ''
           stop
        else if (file_stat) then
-          open(2,file=trim(path_to_inputs_directory)//"movies.nml")
+          open(2,file=trim(path_to_inputs_directory)//"/movies.nml")
           do i = 1, run_parameters % num_movie_namelists
              read(2,movie)
              call init_movie_data(run_parameters % movie_data_array(i), &
@@ -834,14 +833,14 @@ contains
     !if read_from_file, overwrite data read from namelist
     if (frequency_parameters % read_from_file) then
        print "(t5,'reading file frequencies.in')"
-       inquire(file='./inputs/frequencies.in', exist=file_stat)
+       inquire(file=trim(path_to_inputs_directory)//"/frequencies.in", exist=file_stat)
        if (.not.file_stat) then
           print*, ''
-          print*, 'File inputs/frequencies.in does not exist. Stopping.'
+          print*, 'File frequencies.in does not exist in inputs folder. Stopping.'
           print*, ''
           stop
        else if (file_stat) then
-          open(2,file='./inputs/frequencies.in')
+          open(2,file=trim(path_to_inputs_directory)//"/frequencies.in")
           do i = 1, frequency_parameters % num_input_freqs
              read(2, *) frequency_integer(i), &
                   power_input(i), &
@@ -893,7 +892,7 @@ contains
             exist=file_stat)
        if (.not. file_stat) then
           print*, ''
-          print*, 'File inputs/circuit.in does not exist. Stopping.'
+          print*, 'File circuit.in does not exist in inputs folder. Stopping.'
           print*, ''
           stop
        else if (file_stat) then
@@ -952,11 +951,10 @@ contains
 
     if (dispersion_parameters % read_from_file) then
        print "(t5,'reading file dispersion.in')"
-       inquire(file=trim(path_to_inputs_directory)//'/dispersion.in', &
-            exist=file_stat)
+       inquire(file=trim(path_to_inputs_directory)//"/dispersion.in", exist=file_stat)
        if (.not. file_stat) then
           print*, ''
-          print*, 'File inputs/dispersion.in does not exist. Stopping.'
+          print*, 'File dispersion.in does not exist in inputs folder. Stopping.'
           print*, ''
           stop
        else if (file_stat) then
@@ -970,7 +968,7 @@ contains
           ! when a conversion is done one is overwriting data. in the namelist
           ! case one doesn't overwrite the array data, so parameters that
           ! need multiple coversions have to be processed differently.
-          open(2,file=trim(path_to_inputs_directory)//'/dispersion.in')
+          open(2,file=trim(path_to_inputs_directory)//"/dispersion.in")
           do i = 1, circuit_parameters % number_ckt_sections
              do j = 1, dispersion_parameters % num_dispersion_freqs
                 read(2,*) dispersion_parameters % &
@@ -1064,10 +1062,10 @@ contains
 
     if (loss_parameters % read_from_file) then
        print "(t5,'reading file losses.in')"
-       inquire(file='./inputs/losses.in', exist=file_stat)
+       inquire(file=trim(path_to_inputs_directory)//"/losses.in", exist=file_stat)
        if (.not. file_stat) then
           print*, ''
-          print*, 'File inputs/losses.in does not exist. Stopping.'
+          print*, 'File losses.in does not exist in inputs folder. Stopping.'
           print*, ''
           stop
        else if (file_stat) then
@@ -1080,7 +1078,7 @@ contains
           ! when a conversion is done one is overwriting data. in the namelist
           ! case one doesn't overwrite the array data, so parameters that
           ! need multiple coversions have to be processed differently.
-          open(2,file='./inputs/losses.in')
+          open(2,file=trim(path_to_inputs_directory)//"/losses.in")
           ! the first row are the loss locations
           read(2,*) (loss_parameters % loss_location(i), &
                i=1, loss_parameters % number_loss_locations)
